@@ -156,8 +156,8 @@ def get_huggingface_response(request_text: str, user_name: str) -> str:
         return None
 
     try:
-        # Use a free model from Hugging Face (try gpt2 - always available)
-        model_name = "gpt2"
+        # Use a free model from Hugging Face (try distilgpt2 - smaller and available)
+        model_name = "distilgpt2"
 
         headers = {
             "Authorization": f"Bearer {config.huggingface_token}",
