@@ -83,7 +83,7 @@ async def perform_drочка(message: Message):
     
     await message.answer(response)
 
-@router.message(Command(commands=["дрочка", "дрочить"]))
+@router.message(Command(commands=["дрочка", "дрочить", "drochka"]))
 async def cmd_drочка(message: Message):
     await perform_drочка(message)
 
@@ -92,7 +92,7 @@ async def cmd_drочка(message: Message):
 async def word_drоч(message: Message):
     await perform_drочка(message)
 
-@router.message(Command(commands=["статистика_дрочка", "дрочка_статы"]))
+@router.message(Command(commands=["статистика_дрочка", "дрочка_статы", "drochka_stats"]))
 async def cmd_drочка_stats(message: Message):
     user_id = str(message.from_user.id)
     data = load_data()

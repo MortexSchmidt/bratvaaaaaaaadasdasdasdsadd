@@ -57,8 +57,8 @@ async def main():
             ("id", "То же что /whoami"),
             ("mafia", "Инфо о мафии"),
             ("mafia_start", "Начать игру в мафию"),
-            ("дрочка", "Поработать рукой"),  # Added drочка command
-            ("дрочка_статы", "Статистика дрочки"),  # Added drочка stats command
+            ("drochka", "Поработать рукой"),  # Changed to Latin characters
+            ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
         ]
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
