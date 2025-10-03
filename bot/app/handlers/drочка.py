@@ -2,27 +2,66 @@ from __future__ import annotations
 from aiogram import Router
 from aiogram.types import Message
 from aiogram.filters import Command
-import json
+import sqlite3
 import os
 from datetime import datetime, timedelta
 from typing import Dict
 
 router = Router(name="drочка")
 
-# File to store user data
-DATA_FILE = "drочка_data.json"
+# Database file
+DB_FILE = "drochka_data.db"
+
+def init_db():
+    """Initialize the database"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_stats (
+            user_id TEXT PRIMARY KEY,
+            username TEXT,
+            last_drочка TEXT,
+            total_drочка INTEGER DEFAULT 0,
+            current_streak INTEGER DEFAULT 0,
+            max_streak INTEGER DEFAULT 0
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
 def load_data() -> Dict:
-    """Load user data from file"""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
+    """Load user data from database"""
+    init_db()  # Ensure DB is initialized
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_id, username, last_drочка, total_drочка, current_streak, max_streak FROM user_stats')
+    rows = cursor.fetchall()
+    conn.close()
+    
+    data = {}
+    for row in rows:
+        user_id, username, last_drочка, total_drочка, current_streak, max_streak = row
+        data[user_id] = {
+            "username": username,
+            "last_drочка": last_drочка,
+            "total_drочка": total_drочка,
+            "current_streak": current_streak,
+            "max_streak": max_streak
+        }
+    return data
 
-def save_data(data: Dict):
-    """Save user data to file"""
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def save_user_data(user_id: str, username: str, last_drочка: str, total_drочка: int, current_streak: int, max_streak: int):
+    """Save user data to database"""
+    init_db()  # Ensure DB is initialized
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR REPLACE INTO user_stats 
+        (user_id, username, last_drочка, total_drочка, current_streak, max_streak)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, username, last_drочка, total_drочка, current_streak, max_streak))
+    conn.commit()
+    conn.close()
 
 async def perform_drочка(message: Message):
     """Perform the drочка action"""
@@ -63,7 +102,15 @@ async def perform_drочка(message: Message):
         if user_data["current_streak"] > user_data["max_streak"]:
             user_data["max_streak"] = user_data["current_streak"]
         
-        save_data(data)
+        # Save to database
+        save_user_data(
+            user_id, 
+            username, 
+            user_data["last_drочка"], 
+            user_data["total_drочка"], 
+            user_data["current_streak"], 
+            user_data["max_streak"]
+        )
         
         response = f"🔥 {username} только что дрочил!\n\n"
         response += f"📊 Статистика:\n"

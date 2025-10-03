@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import sqlite3
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeDefault
@@ -27,6 +28,13 @@ async def main():
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)]
     )
+
+    # Initialize the database for drochka system
+    try:
+        drочка.init_db()
+        logging.info("Database initialized successfully")
+    except Exception as e:
+        logging.error(f"Failed to initialize database: {e}")
 
     # регистрация роутеров
     dp.include_router(basic.router)
