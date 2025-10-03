@@ -51,57 +51,6 @@ async def react_on_word(message: Message):
 async def cmd_zov(message: Message):
     if message.chat.type not in {"group", "supergroup"}:
         return
-        
-    try:
-        # Try to get all chat members
-        chat_id = message.chat.id
-        members = []
-        member_count = 0
 
-        try:
-            async for member in message.bot.get_chat_members(chat_id):
-                user = member.user
-                member_count += 1
-
-                # Skip bots and deleted accounts
-                if user.is_bot or user.first_name is None:
-                    continue
-
-                if user.username:
-                    # Use username if available (clickable)
-                    members.append(f"@{user.username}")
-                else:
-                    # Use HTML link to user if no username
-                    name = user.first_name or "Пользователь"
-                    members.append(f"<a href='tg://user?id={user.id}'>{name}</a>")
-
-            logger.info(f"Found {member_count} members, {len(members)} valid mentions in chat {chat_id}")
-
-            if not members:
-                # No valid members found, fallback to @all
-                await message.answer("сука быстрее все сюда нахуй @all")
-                return
-
-            # Limit mentions to prevent message too long error
-            max_mentions = 20  # Reduced limit
-            if len(members) > max_mentions:
-                members = members[:max_mentions]
-                logger.warning(f"Limited mentions to {max_mentions} out of {len(members)} total")
-
-            # Join mentions with spaces for better formatting
-            mentions_text = " ".join(members)
-
-            # Send message with mentions
-            await message.answer(
-                f"сука быстрее все сюда нахуй {mentions_text}",
-                parse_mode="HTML"
-            )
-
-        except Exception as member_error:
-            logger.error(f"Error getting chat members: {member_error}")
-            # Fallback to @all if can't get members
-            await message.answer("сука быстрее все сюда нахуй @all")
-
-    except Exception as e:
-        logger.error(f"Error in zov command: {e}")
-        await message.answer("сука быстрее все сюда нахуй @all")
+    # Simple version that always uses @all
+    await message.answer("сука быстрее все сюда нахуй @all")
