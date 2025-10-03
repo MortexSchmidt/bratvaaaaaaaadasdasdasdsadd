@@ -156,21 +156,16 @@ def get_huggingface_response(request_text: str, user_name: str) -> str:
         return None
 
     try:
-        # Use a free model from Hugging Face (try different models)
-        model_name = "HuggingFaceH4/zephyr-7b-beta"
+        # Use a free model from Hugging Face (try gpt2 - always available)
+        model_name = "gpt2"
 
         headers = {
             "Authorization": f"Bearer {config.huggingface_token}",
             "Content-Type": "application/json"
         }
 
-        # Create prompt for Milana's personality (Zephyr format)
-        system_prompt = """Ты - Милана, дружелюбная и умная девушка-помощник в Telegram боте.
-        Ты всегда вежливая, позитивная и готова помочь. Ты общаешься на русском языке.
-        Ты можешь помогать с домашними заданиями, объяснять сложные темы, отвечать на вопросы.
-        Будь естественной в общении, как настоящая подруга."""
-
-        prompt = f"<|system|>\n{system_prompt}</s>\n<|user|>\nМеня зовут {user_name}. Мой вопрос: {request_text}</s>\n<|assistant|>"
+        # Simple prompt for GPT-2
+        prompt = f"Ты - Милана, дружелюбная помощница. Пользователь {user_name} спрашивает: {request_text}\nМилана отвечает:"
 
         payload = {
             "inputs": prompt,
