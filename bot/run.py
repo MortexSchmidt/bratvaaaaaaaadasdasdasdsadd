@@ -6,6 +6,7 @@ from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandSc
 from app import load_config
 from app.handlers import basic, fun
 from app.handlers import group as group_handlers
+from app.handlers import mafia
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -29,6 +30,7 @@ async def main():
     dp.include_router(basic.router)
     dp.include_router(fun.router)
     dp.include_router(group_handlers.router)
+    dp.include_router(mafia.router)
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -51,6 +53,8 @@ async def main():
             ("groupinfo", "Инфо о группе"),
             ("whoami", "Ваш ID"),
             ("id", "То же что /whoami"),
+            ("mafia", "Инфо о мафии"),
+            ("mafia_start", "Начать игру в мафию"),
         ]
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
