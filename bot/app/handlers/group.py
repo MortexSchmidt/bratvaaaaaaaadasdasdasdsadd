@@ -51,6 +51,52 @@ async def react_on_word(message: Message):
 async def cmd_zov(message: Message):
     if message.chat.type not in {"group", "supergroup"}:
         return
-
-    # Simple version that always uses @all
-    await message.answer("сука быстрее все сюда нахуй @all")
+    
+    try:
+        # Получаем список администраторов чата
+        admins = await message.bot.get_chat_administrators(message.chat.id)
+        mentions = []
+        
+        for admin in admins:
+            user = admin.user
+            # Создаем корректные упоминания
+            if user.username:
+                # Для пользователей с username используем прямое упоминание
+                mentions.append(f"@{user.username}")
+            else:
+                # Для пользователей без username создаем HTML-ссылку
+                first_name = user.first_name or 'Пользователь'
+                mentions.append(f"<a href='tg://user?id={user.id}'>{first_name}</a>")
+        
+        # Объединяем упоминания через запятую
+        mentions_text = ", ".join(mentions)
+        
+        # Отправляем сообщение с упоминаниями используя HTML разметку
+        response_text = f"сука быстрее все сюда нахуй\n{mentions_text}"
+        await message.answer(response_text, parse_mode="HTML")
+        
+    except TelegramBadRequest as e:
+        # Если возникает ошибка при отправке, пробуем отправить без HTML-разметки
+        logger.error(f"TelegramBadRequest in zov command: {e}")
+        try:
+            # Резервный вариант: отправка без HTML с обычными упоминаниями
+            admins = await message.bot.get_chat_administrators(message.chat.id)
+            plain_mentions = []
+            
+            for admin in admins:
+                user = admin.user
+                if user.username:
+                    plain_mentions.append(f"@{user.username}")
+                else:
+                    plain_mentions.append(user.first_name or "Пользователь")
+            
+            plain_mentions_text = ", ".join(plain_mentions)
+            response_text = f"сука быстрее все сюда нахуй {plain_mentions_text}"
+            await message.answer(response_text)
+        except Exception as fallback_error:
+            logger.error(f"Fallback error in zov command: {fallback_error}")
+            await message.answer("сука быстрее все сюда нахуй")
+            
+    except Exception as e:
+        logger.error(f"Error in zov command: {e}")
+        await message.answer("сука быстрее все сюда нахуй")
