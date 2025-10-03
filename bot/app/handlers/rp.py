@@ -15,7 +15,8 @@ RP_ACTIONS = {
     "убить": "убил",
     "пукнуть": "пукнул на",
     "минет": "сделал минет",
-    "секс": "занялся сексом с"
+    "секс": "занялся сексом с",
+    "порно": "снялся в порно с"
 }
 
 @router.message(lambda message: message.text and message.text.lower() in RP_ACTIONS.keys())
@@ -74,6 +75,13 @@ async def rp_action(message: Message):
             f"{initiator_mention} занялся сексом с {target_mention}. Горячо!",
             f"{initiator_mention} и {target_mention} устроили страстную ночь!",
             f"{target_mention} получил удовольствие от {initiator_mention}!",
+        ]
+        response = random.choice(responses)
+    elif action == "порно":
+        responses = [
+            f"{initiator_mention} снялся в порно с {target_mention}. Камера, мотор!",
+            f"{initiator_mention} и {target_mention} устроили горячие съемки!",
+            f"{target_mention} стал звездой порно с {initiator_mention}!",
         ]
         response = random.choice(responses)
     
