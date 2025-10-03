@@ -10,6 +10,7 @@ from app.handlers import group as group_handlers
 from app.handlers import mafia
 from app.handlers import drочка  # Added drочка handler
 from app.handlers import rp  # Added RP handler
+from app.handlers import ai  # Added AI handler
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -43,6 +44,7 @@ async def main():
     dp.include_router(mafia.router)
     dp.include_router(drочка.router)  # Register drочка router
     dp.include_router(rp.router)  # Register RP router
+    dp.include_router(ai.router)  # Register AI router
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
