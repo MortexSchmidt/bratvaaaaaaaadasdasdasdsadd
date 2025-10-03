@@ -1,12 +1,11 @@
 from __future__ import annotations
 from aiogram import Router
 from aiogram.types import Message
-from aiogram.filters import Command
 import random
 
 router = Router(name="rp")
 
-# RP actions with their descriptions
+# RP actions mapping
 RP_ACTIONS = {
     "трахнуть": "трахнул",
     "изнасиловать": "изнасиловал",
@@ -18,14 +17,14 @@ RP_ACTIONS = {
     "минет": "сделал минет"
 }
 
-@router.message(Command(commands=list(RP_ACTIONS.keys())))
+@router.message(lambda message: message.text and message.text.lower() in RP_ACTIONS.keys())
 async def rp_action(message: Message):
-    # Get the command that was used
-    command = message.text.split()[0][1:]  # Remove the '/' prefix
+    # Get the action that was used
+    action = message.text.lower()
     
     # Check if the message is a reply
     if not message.reply_to_message:
-        await message.answer("Эту команду нужно использовать в ответ на сообщение пользователя!")
+        await message.answer("Это действие нужно применять в ответ на сообщение пользователя!")
         return
     
     # Get the users
@@ -34,28 +33,28 @@ async def rp_action(message: Message):
     
     # Check if user is trying to RP with themselves
     if initiator.id == target.id:
-        if command in ["убить", "изнасиловать"]:
-            response = f"{initiator.first_name} не смог себя {command} и ушел в депрессию"
-        elif command in ["пукнуть"]:
+        if action in ["убить", "изнасиловать"]:
+            response = f"{initiator.first_name} не смог себя {action} и ушел в депрессию"
+        elif action in ["пукнуть"]:
             response = f"{initiator.first_name} пукнул себе под себя. Странный чел"
         else:
-            response = f"{initiator.first_name} не смог себя {command}. Ему нужен партнёр!"
+            response = f"{initiator.first_name} не смог себя {action}. Ему нужен партнёр!"
         await message.answer(response)
         return
     
     # Generate response based on action
-    action_past = RP_ACTIONS[command]
+    action_past = RP_ACTIONS[action]
     response = f"{initiator.first_name} {action_past} {target.first_name}"
     
     # Add some randomness to responses
-    if command == "пукнуть":
+    if action == "пукнуть":
         responses = [
             f"{initiator.first_name} пукнул на {target.first_name}. Воняет же!",
             f"{initiator.first_name} пукнул прямо в лицо {target.first_name}. Не выносимо!",
             f"{initiator.first_name} пукнул, а {target.first_name} получил дозу газа!",
         ]
         response = random.choice(responses)
-    elif command == "минет":
+    elif action == "минет":
         responses = [
             f"{initiator.first_name} сделал минет {target.first_name}. Вот это сервис!",
             f"{initiator.first_name} решил порадовать {target.first_name} минетом!",
