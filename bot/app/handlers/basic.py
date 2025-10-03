@@ -7,7 +7,7 @@ router = Router(name="basic")
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    await message.answer("Привет! Я фан-бот компании. Напиши /help чтобы узнать команды.")
+    await message.answer("салам пополам я хуеглотка")
 
 @router.message(Command(commands=["help"]))
 async def cmd_help(message: Message):
