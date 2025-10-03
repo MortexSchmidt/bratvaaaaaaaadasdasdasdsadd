@@ -1,0 +1,9 @@
+# Root ignore
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+.env
+# OS
+.DS_Store
+Thumbs.db

@@ -5,6 +5,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from app import load_config
 from app.handlers import basic, fun
+from app.handlers import group as group_handlers
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -15,9 +16,18 @@ async def main():
     bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
 
+    # базовое логирование
+    import logging, sys
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+
     # регистрация роутеров
     dp.include_router(basic.router)
     dp.include_router(fun.router)
+    dp.include_router(group_handlers.router)
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
