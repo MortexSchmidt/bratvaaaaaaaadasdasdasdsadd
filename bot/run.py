@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
+from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeDefault
 from app import load_config
 from app.handlers import basic, fun
 from app.handlers import group as group_handlers
@@ -52,14 +52,29 @@ async def main():
             ("whoami", "Ваш ID"),
             ("id", "То же что /whoami"),
         ]
+        # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in base_cmds if c not in {"groupinfo"}],
+            [BotCommand(command=c, description=d) for c, d in base_cmds],
+            scope=BotCommandScopeDefault()
+        )
+        # Private chats (можно без groupinfo, но оставим симметрично)
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in base_cmds if c != "groupinfo"],
             scope=BotCommandScopeAllPrivateChats()
         )
+        # Group chats
         await bot.set_my_commands(
             [BotCommand(command=c, description=d) for c, d in base_cmds],
             scope=BotCommandScopeAllGroupChats()
         )
+        # Логируем что реально установлено по default
+        try:
+            cmds = await bot.get_my_commands(scope=BotCommandScopeDefault())
+            import logging
+            logging.getLogger(__name__).info("Bot commands (default) set: %s", [f"/{c.command}" for c in cmds])
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Cannot fetch commands list: %s", e)
 
     print("Запуск бота...")
     await setup_commands()
