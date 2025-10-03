@@ -23,11 +23,14 @@ async def bot_membership_changed(event: ChatMemberUpdated):
 async def cmd_groupinfo(message: Message):
     if message.chat.type not in {"group", "supergroup"}:
         return await message.answer("Эта команда доступна только в группе")
+    chat = message.chat
     await message.answer(
-        f"ID чата: <code>{message.chat.id}</code>\n"
-        f"Тип: {message.chat.type}\n"
-        f"Ваш ID: <code>{message.from_user.id}</code>\n"
-        "Если бот не видит сообщения — выключите Privacy Mode у BotFather."
+        f"<b>Информация о группе:</b>\n"
+        f"ID: <code>{chat.id}</code>\n"
+        f"Тип: {chat.type}\n"
+        f"Название: {chat.title}\n"
+        f"Username: {chat.username or 'Нет'}\n"
+        f"Описание: {chat.description or 'Пусто'}"
     )
 
 # Дополнительный триггер если privacy отключён
@@ -35,7 +38,7 @@ async def cmd_groupinfo(message: Message):
 async def react_on_word(message: Message):
     await message.reply("Я слышу слово 'бот' – я тут. /help")
 
-@router.message(Command(commands=["zov"]))
+@router.message(lambda message: message.text and message.text.lower() == "зов")
 async def cmd_zov(message: Message):
     if message.chat.type not in {"group", "supergroup"}:
         return

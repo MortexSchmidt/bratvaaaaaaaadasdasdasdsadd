@@ -44,22 +44,28 @@ async def rp_action(message: Message):
     
     # Generate response based on action
     action_past = RP_ACTIONS[action]
-    response = f"{initiator.first_name} {action_past} {target.first_name}"
+    
+    # Create mentions for both users to ensure notifications
+    initiator_mention = f"<a href='tg://user?id={initiator.id}'>{initiator.first_name}</a>"
+    target_mention = f"<a href='tg://user?id={target.id}'>{target.first_name}</a>"
+    
+    response = f"{initiator_mention} {action_past} {target_mention}"
     
     # Add some randomness to responses
     if action == "пукнуть":
         responses = [
-            f"{initiator.first_name} пукнул на {target.first_name}. Воняет же!",
-            f"{initiator.first_name} пукнул прямо в лицо {target.first_name}. Не выносимо!",
-            f"{initiator.first_name} пукнул, а {target.first_name} получил дозу газа!",
+            f"{initiator_mention} пукнул на {target_mention}. Воняет же!",
+            f"{initiator_mention} пукнул прямо в лицо {target_mention}. Не выносимо!",
+            f"{initiator_mention} пукнул, а {target_mention} получил дозу газа!",
         ]
         response = random.choice(responses)
     elif action == "минет":
         responses = [
-            f"{initiator.first_name} сделал минет {target.first_name}. Вот это сервис!",
-            f"{initiator.first_name} решил порадовать {target.first_name} минетом!",
-            f"{target.first_name} получил удовольствие от {initiator.first_name}!",
+            f"{initiator_mention} сделал минет {target_mention}. Вот это сервис!",
+            f"{initiator_mention} решил порадовать {target_mention} минетом!",
+            f"{target_mention} получил удовольствие от {initiator_mention}!",
         ]
         response = random.choice(responses)
     
-    await message.answer(response)
+    # Send the message with HTML parsing to make mentions clickable
+    await message.answer(response, parse_mode="HTML")
