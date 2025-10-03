@@ -9,11 +9,13 @@ from typing import Dict
 
 router = Router(name="drочка")
 
-# Database file
-DB_FILE = "drochka_data.db"
+# Database file - use /app/data for persistent storage on Railway
+DB_FILE = os.path.join(os.getenv("DB_DIR", "."), "drochka_data.db")
 
 def init_db():
     """Initialize the database"""
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
