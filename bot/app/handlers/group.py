@@ -56,8 +56,16 @@ async def cmd_zov(message: Message):
         # Get all chat members
         chat_id = message.chat.id
         members = []
+        member_count = 0
+
         async for member in message.bot.get_chat_members(chat_id):
             user = member.user
+            member_count += 1
+
+            # Skip bots and deleted accounts
+            if user.is_bot or user.first_name is None:
+                continue
+
             if user.username:
                 # Use username if available (clickable)
                 members.append(f"@{user.username}")
@@ -65,11 +73,23 @@ async def cmd_zov(message: Message):
                 # Use HTML link to user if no username
                 name = user.first_name or "Пользователь"
                 members.append(f"<a href='tg://user?id={user.id}'>{name}</a>")
-        mentions = members
-        
+
+        logger.info(f"Found {member_count} members, {len(members)} valid mentions in chat {chat_id}")
+
+        if not members:
+            # No valid members found
+            await message.answer("сука быстрее все сюда нахуй")
+            return
+
+        # Limit mentions to prevent message too long error
+        max_mentions = 50
+        if len(members) > max_mentions:
+            members = members[:max_mentions]
+            logger.warning(f"Limited mentions to {max_mentions} out of {len(members)} total")
+
         # Join all mentions with commas
-        mentions_text = ", ".join(mentions)
-        
+        mentions_text = ", ".join(members)
+
         # Send message with mentions
         await message.answer(
             f"сука быстрее все сюда нахуй\n{mentions_text}",
@@ -79,7 +99,8 @@ async def cmd_zov(message: Message):
         if "BUTTON_USER_PRIVACY_RESTRICTED" in str(e):
             await message.answer("сука быстрее все сюда нахуй")
         else:
-            logger.error(f"Error in zov command: {e}")
+            logger.error(f"TelegramBadRequest in zov command: {e}")
+            await message.answer("сука быстрее все сюда нахуй")
     except Exception as e:
         logger.error(f"Error in zov command: {e}")
         await message.answer("сука быстрее все сюда нахуй")
