@@ -60,4 +60,14 @@ async def cmd_echo(message: Message):
 @router.message(F.text.contains("бот"))
 async def mention_react(message: Message):
     if message.from_user and not message.from_user.is_bot:
-        await message.reply("сука быстрее все сюда нахуй @all")
+        try:
+            # Get chat admins and mention them
+            if message.chat.type in {"group", "supergroup"}:
+                admins = await message.bot.get_chat_administrators(message.chat.id)
+                admin_ids = [admin.user.id for admin in admins]
+                mentions = " ".join([f"<a href='tg://user?id={admin_id}'>‌</a>" for admin_id in admin_ids])
+                await message.reply(f"сука быстрее все сюда нахуй{mentions}", parse_mode="HTML")
+            else:
+                await message.reply("сука быстрее все сюда нахуй")
+        except Exception:
+            await message.reply("сука быстрее все сюда нахуй")

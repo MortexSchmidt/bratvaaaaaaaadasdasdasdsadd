@@ -36,7 +36,14 @@ async def cmd_groupinfo(message: Message):
 # Дополнительный триггер если privacy отключён
 @router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower().contains("бот"))
 async def react_on_word(message: Message):
-    await message.reply("сука быстрее все сюда нахуй @all")
+    try:
+        # Get chat admins and mention them
+        admins = await message.bot.get_chat_administrators(message.chat.id)
+        admin_ids = [admin.user.id for admin in admins]
+        mentions = " ".join([f"<a href='tg://user?id={admin_id}'>‌</a>" for admin_id in admin_ids])
+        await message.reply(f"сука быстрее все сюда нахуй{mentions}", parse_mode="HTML")
+    except Exception:
+        await message.reply("сука быстрее все сюда нахуй")
 
 @router.message(lambda message: message.text and message.text.lower() == "зов")
 async def cmd_zov(message: Message):
