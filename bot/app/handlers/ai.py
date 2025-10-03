@@ -104,15 +104,32 @@ def get_ai_response(request_text: str, user_name: str) -> str:
 
         logging.info(f"Sending request to OpenAI for user {user_name}: {request_text[:50]}...")
 
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+        except Exception as api_error:
+            logging.error(f"OpenAI API error: {type(api_error).__name__}: {api_error}")
+            # Try with a different model if gpt-3.5-turbo fails
+            if "gpt-3.5-turbo" in str(api_error):
+                logging.info("Trying with gpt-4 model...")
+                response = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": user_message}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
+            else:
+                raise api_error
 
         ai_response = response.choices[0].message.content.strip()
         logging.info(f"Received response from OpenAI: {ai_response[:50]}...")
