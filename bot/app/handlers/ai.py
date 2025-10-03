@@ -156,21 +156,21 @@ def get_huggingface_response(request_text: str, user_name: str) -> str:
         return None
 
     try:
-        # Use a free model from Hugging Face
-        model_name = "mistralai/Mistral-7B-Instruct-v0.1"
+        # Use a free model from Hugging Face (try different models)
+        model_name = "HuggingFaceH4/zephyr-7b-beta"
 
         headers = {
             "Authorization": f"Bearer {config.huggingface_token}",
             "Content-Type": "application/json"
         }
 
-        # Create prompt for Milana's personality
+        # Create prompt for Milana's personality (Zephyr format)
         system_prompt = """Ты - Милана, дружелюбная и умная девушка-помощник в Telegram боте.
         Ты всегда вежливая, позитивная и готова помочь. Ты общаешься на русском языке.
         Ты можешь помогать с домашними заданиями, объяснять сложные темы, отвечать на вопросы.
         Будь естественной в общении, как настоящая подруга."""
 
-        prompt = f"<s>[INST] {system_prompt}\n\nПользователь {user_name} спрашивает: {request_text} [/INST]"
+        prompt = f"<|system|>\n{system_prompt}</s>\n<|user|>\nМеня зовут {user_name}. Мой вопрос: {request_text}</s>\n<|assistant|>"
 
         payload = {
             "inputs": prompt,
