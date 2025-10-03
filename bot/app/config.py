@@ -9,6 +9,7 @@ class Config:
     bot_token: str
     admins: List[int]
     openai_api_key: str
+    huggingface_token: str
 
 
 def load_config(env_file: str = ".env") -> Config:
@@ -25,7 +26,10 @@ def load_config(env_file: str = ".env") -> Config:
     openai_key = os.getenv("OPENAI_API_KEY", "")
     print(f"DEBUG: OPENAI_API_KEY loaded: {bool(openai_key)} (length: {len(openai_key) if openai_key else 0})")
 
-    return Config(bot_token=token, admins=admins, openai_api_key=openai_key)
+    hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
+    print(f"DEBUG: HUGGINGFACE_TOKEN loaded: {bool(hf_token)} (length: {len(hf_token) if hf_token else 0})")
+
+    return Config(bot_token=token, admins=admins, openai_api_key=openai_key, huggingface_token=hf_token)
 
 
 def format_user_mention(user) -> str:

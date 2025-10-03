@@ -4,6 +4,8 @@ from aiogram.types import Message
 import re
 import random
 import logging
+import requests
+import json
 from openai import OpenAI
 from app.config import load_config
 
@@ -137,4 +139,76 @@ def get_ai_response(request_text: str, user_name: str) -> str:
 
     except Exception as e:
         logging.error(f"Error calling OpenAI API: {type(e).__name__}: {e}")
+        # Try Hugging Face as fallback
+        logging.info("Trying Hugging Face API as fallback...")
+        hf_response = get_huggingface_response(request_text, user_name)
+        if hf_response:
+            return hf_response
         return "Извини, у меня проблемы с ИИ. Попробуй позже или спроси что-то попроще."
+
+
+def get_huggingface_response(request_text: str, user_name: str) -> str:
+    """
+    Get response from Hugging Face Inference API (free alternative)
+    """
+    if not config.huggingface_token:
+        logging.error("Hugging Face token not found")
+        return None
+
+    try:
+        # Use a free model from Hugging Face
+        model_name = "mistralai/Mistral-7B-Instruct-v0.1"
+
+        headers = {
+            "Authorization": f"Bearer {config.huggingface_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Create prompt for Milana's personality
+        system_prompt = """Ты - Милана, дружелюбная и умная девушка-помощник в Telegram боте.
+        Ты всегда вежливая, позитивная и готова помочь. Ты общаешься на русском языке.
+        Ты можешь помогать с домашними заданиями, объяснять сложные темы, отвечать на вопросы.
+        Будь естественной в общении, как настоящая подруга."""
+
+        prompt = f"<s>[INST] {system_prompt}\n\nПользователь {user_name} спрашивает: {request_text} [/INST]"
+
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 500,
+                "temperature": 0.7,
+                "do_sample": True,
+                "return_full_text": False
+            }
+        }
+
+        logging.info(f"Sending request to Hugging Face for user {user_name}")
+
+        response = requests.post(
+            f"https://api-inference.huggingface.co/models/{model_name}",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                generated_text = result[0].get("generated_text", "")
+                # Clean up the response
+                clean_response = generated_text.replace(prompt, "").strip()
+                logging.info(f"Received response from Hugging Face: {clean_response[:50]}...")
+                return clean_response
+            else:
+                logging.error(f"Unexpected response format from Hugging Face: {result}")
+                return None
+        elif response.status_code == 429:
+            logging.warning("Hugging Face rate limit exceeded")
+            return None
+        else:
+            logging.error(f"Hugging Face API error: {response.status_code} - {response.text}")
+            return None
+
+    except Exception as e:
+        logging.error(f"Error calling Hugging Face API: {type(e).__name__}: {e}")
+        return None
