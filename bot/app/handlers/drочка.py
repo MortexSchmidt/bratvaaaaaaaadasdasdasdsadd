@@ -6,6 +6,7 @@ import sqlite3
 import os
 from datetime import datetime, timedelta
 from typing import Dict
+from .. import format_user_mention
 
 router = Router(name="drочка")
 
@@ -106,15 +107,16 @@ async def perform_drочка(message: Message):
         
         # Save to database
         save_user_data(
-            user_id, 
-            username, 
-            user_data["last_drочка"], 
-            user_data["total_drочка"], 
-            user_data["current_streak"], 
+            user_id,
+            username,
+            user_data["last_drочка"],
+            user_data["total_drочка"],
+            user_data["current_streak"],
             user_data["max_streak"]
         )
-        
-        response = f"🔥 {username} только что дрочил!\n\n"
+
+        user_mention = format_user_mention(message.from_user)
+        response = f"🔥 {user_mention} только что дрочил!\n\n"
         response += f"📊 Статистика:\n"
         response += f"Всего дрочков: {user_data['total_drочка']}\n"
         response += f"Текущая серия: {user_data['current_streak']}\n"
@@ -127,7 +129,8 @@ async def perform_drочка(message: Message):
         hours, remainder = divmod(time_left.seconds, 3600)
         minutes, _ = divmod(remainder, 60)
         
-        response = f"⏳ {username}, ты уже дрочил сегодня!\n"
+        user_mention = format_user_mention(message.from_user)
+        response = f"⏳ {user_mention}, ты уже дрочил сегодня!\n"
         response += f"Следующая возможность через: {hours} ч {minutes} мин"
     
     await message.answer(response)
@@ -151,9 +154,9 @@ async def cmd_drочка_stats(message: Message):
         return
     
     user_data = data[user_id]
-    username = user_data["username"]
-    
-    response = f"📊 Статистика дрочки для {username}:\n\n"
+    user_mention = format_user_mention(message.from_user)
+
+    response = f"📊 Статистика дрочки для {user_mention}:\n\n"
     response += f"Всего дрочков: {user_data['total_drочка']}\n"
     response += f"Текущая серия: {user_data['current_streak']}\n"
     response += f"Максимальная серия: {user_data['max_streak']}\n"

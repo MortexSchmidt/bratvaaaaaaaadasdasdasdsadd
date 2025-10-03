@@ -6,6 +6,7 @@ import random
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+from .. import format_user_mention, format_user_mention_from_id
 
 router = Router(name="mafia")
 
@@ -68,9 +69,10 @@ async def cmd_mafia_start(message: Message):
     game = MafiaGame(chat_id, [player])
     games[chat_id] = game
 
+    player_mention = format_user_mention_from_id(player.user_id, player.username)
     await message.answer(
         "🎭 <b>Игра в мафию начинается!</b>\n\n"
-        f"Игрок {player.username} присоединился.\n"
+        f"Игрок {player_mention} присоединился.\n"
         "Другие присоединяйтесь с помощью /join_mafia\n"
         "Админ может начать игру с /start_game_mafia"
     )
@@ -88,7 +90,8 @@ async def cmd_join_mafia(message: Message):
 
     player = Player(user.id, user.username or "Неизвестный")
     game.players.append(player)
-    await message.answer(f"🎭 {player.username} присоединился к игре! Игроков: {len(game.players)}")
+    player_mention = format_user_mention_from_id(player.user_id, player.username)
+    await message.answer(f"🎭 {player_mention} присоединился к игре! Игроков: {len(game.players)}")
 
 @router.message(Command(commands=["start_game_mafia"]))
 async def cmd_start_game_mafia(message: Message):

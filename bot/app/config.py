@@ -19,3 +19,13 @@ def load_config(env_file: str = ".env") -> Config:
     admins_raw = os.getenv("ADMINS", "")
     admins = [int(x) for x in admins_raw.split(',') if x.strip().isdigit()]
     return Config(bot_token=token, admins=admins)
+
+
+def format_user_mention(user) -> str:
+    """Format user mention as clickable link"""
+    username = user.username or user.first_name or "Неизвестный"
+    return f"<a href='tg://user?id={user.id}'>{username}</a>"
+
+def format_user_mention_from_id(user_id: int, username: str) -> str:
+    """Format user mention from user_id and username"""
+    return f"<a href='tg://user?id={user_id}'>{username}</a>"
