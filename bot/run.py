@@ -67,6 +67,12 @@ async def main():
             ("id", "То же что /whoami"),
             ("mafia", "Инфо о мафии"),
             ("mafia_start", "Начать игру в мафию"),
+            ("join_mafia", "Присоединиться"),
+            ("start_game_mafia", "Запустить игру"),
+            ("vote", "Голосовать @user"),
+            ("kill_mafia", "Убить ночью"),
+            ("heal_mafia", "Лечить ночью"),
+            ("check_mafia", "Проверить ночью"),
             ("drochka", "Поработать рукой"),  # Changed to Latin characters
             ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
         ]
