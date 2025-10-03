@@ -60,4 +60,4 @@ async def cmd_echo(message: Message):
 @router.message(F.text.contains("бот"))
 async def mention_react(message: Message):
     if message.from_user and not message.from_user.is_bot:
-        await message.reply("Кто звал? Я тут!")
+        await message.reply("сука быстрее все сюда нахуй @all")

@@ -36,7 +36,7 @@ async def cmd_groupinfo(message: Message):
 # Дополнительный триггер если privacy отключён
 @router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower().contains("бот"))
 async def react_on_word(message: Message):
-    await message.reply("Я слышу слово 'бот' – я тут. /help")
+    await message.reply("сука быстрее все сюда нахуй @all")
 
 @router.message(lambda message: message.text and message.text.lower() == "зов")
 async def cmd_zov(message: Message):
