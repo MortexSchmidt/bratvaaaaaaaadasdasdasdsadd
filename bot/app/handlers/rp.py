@@ -14,7 +14,8 @@ RP_ACTIONS = {
     "засосать": "засосал",
     "убить": "убил",
     "пукнуть": "пукнул на",
-    "минет": "сделал минет"
+    "минет": "сделал минет",
+    "секс": "занялся сексом с"
 }
 
 @router.message(lambda message: message.text and message.text.lower() in RP_ACTIONS.keys())
@@ -37,6 +38,8 @@ async def rp_action(message: Message):
             response = f"{initiator.first_name} не смог себя {action} и ушел в депрессию"
         elif action in ["пукнуть"]:
             response = f"{initiator.first_name} пукнул себе под себя. Странный чел"
+        elif action in ["секс"]:
+            response = f"{initiator.first_name} занялся онанизмом. Одиноко!"
         else:
             response = f"{initiator.first_name} не смог себя {action}. Ему нужен партнёр!"
         await message.answer(response)
@@ -63,6 +66,13 @@ async def rp_action(message: Message):
         responses = [
             f"{initiator_mention} сделал минет {target_mention}. Вот это сервис!",
             f"{initiator_mention} решил порадовать {target_mention} минетом!",
+            f"{target_mention} получил удовольствие от {initiator_mention}!",
+        ]
+        response = random.choice(responses)
+    elif action == "секс":
+        responses = [
+            f"{initiator_mention} занялся сексом с {target_mention}. Горячо!",
+            f"{initiator_mention} и {target_mention} устроили страстную ночь!",
             f"{target_mention} получил удовольствие от {initiator_mention}!",
         ]
         response = random.choice(responses)
