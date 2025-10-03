@@ -35,21 +35,33 @@ async def cmd_groupinfo(message: Message):
 async def react_on_word(message: Message):
     await message.reply("Я слышу слово 'бот' – я тут. /help")
 
-@router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower() == "зов")
+@router.message(Command(commands=["zov"]))
 async def cmd_zov(message: Message):
-    try:
-        # Get chat members
-        chat_id = message.chat.id
-        # Try to mention all chat members
-        admins = await message.bot.get_chat_administrators(chat_id)
-        admin_ids = [admin.user.id for admin in admins]
+    if message.chat.type not in {"group", "supergroup"}:
+        return
         
-        # Create mention string for all admins
-        mentions = " ".join([f"<a href='tg://user?id={admin_id}'>‌</a>" for admin_id in admin_ids])
+    try:
+        # Get chat administrators
+        chat_id = message.chat.id
+        admins = await message.bot.get_chat_administrators(chat_id)
+        mentions = []
+        
+        for admin in admins:
+            user = admin.user
+            if user.username:
+                # Use username if available (clickable)
+                mentions.append(f"@{user.username}")
+            else:
+                # Use HTML link to user if no username
+                name = user.first_name or "Пользователь"
+                mentions.append(f"<a href='tg://user?id={user.id}'>{name}</a>")
+        
+        # Join all mentions with commas
+        mentions_text = ", ".join(mentions)
         
         # Send message with mentions
         await message.answer(
-            f"сука быстрее все сюда нахуй{mentions}",
+            f"сука быстрее все сюда нахуй\n{mentions_text}",
             parse_mode="HTML"
         )
     except TelegramBadRequest as e:

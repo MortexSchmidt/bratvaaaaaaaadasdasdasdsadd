@@ -8,6 +8,7 @@ from app.handlers import basic, fun
 from app.handlers import group as group_handlers
 from app.handlers import mafia
 from app.handlers import drочка  # Added drочка handler
+from app.handlers import rp  # Added RP handler
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -33,6 +34,7 @@ async def main():
     dp.include_router(group_handlers.router)
     dp.include_router(mafia.router)
     dp.include_router(drочка.router)  # Register drочка router
+    dp.include_router(rp.router)  # Register RP router
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -59,6 +61,15 @@ async def main():
             ("mafia_start", "Начать игру в мафию"),
             ("drochka", "Поработать рукой"),  # Changed to Latin characters
             ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
+            # RP commands
+            ("трахнуть", "RP: Трахнуть пользователя (в ответе)"),
+            ("изнасиловать", "RP: Изнасиловать пользователя (в ответе)"),
+            ("поцеловать", "RP: Поцеловать пользователя (в ответе)"),
+            ("обнять", "RP: Обнять пользователя (в ответе)"),
+            ("засосать", "RP: Засосать пользователя (в ответе)"),
+            ("убить", "RP: Убить пользователя (в ответе)"),
+            ("пукнуть", "RP: Пукнуть на пользователя (в ответе)"),
+            ("минет", "RP: Сделать минет пользователю (в ответе)"),
         ]
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
