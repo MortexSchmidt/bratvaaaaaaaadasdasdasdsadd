@@ -25,6 +25,17 @@ async def cmd_help(message: Message):
 async def cmd_ping(message: Message):
     await message.answer("pong")
 
+@router.message(Command(commands=["whoami", "id"]))
+async def cmd_whoami(message: Message):
+    user = message.from_user
+    chat = message.chat
+    await message.answer(
+        f"<b>User ID:</b> <code>{user.id}</code>\n" \
+        f"<b>Chat ID:</b> <code>{chat.id}</code>\n" \
+        f"Тип чата: {chat.type}\n" \
+        "Если бот не ловит сообщения в группе — отключи privacy у BotFather."
+    )
+
 @router.message(Command(commands=["echo"]))
 async def cmd_echo(message: Message):
     # удаляем саму команду

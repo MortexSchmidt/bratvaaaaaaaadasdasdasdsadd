@@ -1,8 +1,8 @@
 from __future__ import annotations
 import asyncio
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
 from app import load_config
 from app.handlers import basic, fun
 from app.handlers import group as group_handlers
@@ -13,7 +13,8 @@ from aiogram.types import Message
 
 async def main():
     config = load_config()
-    bot = Bot(token=config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    # В aiogram 3.3.0 ещё нет DefaultBotProperties, передаём parse_mode напрямую
+    bot = Bot(token=config.bot_token, parse_mode=ParseMode.HTML)
     dp = Dispatcher()
 
     # базовое логирование
@@ -40,7 +41,28 @@ async def main():
         stats = await broadcast(bot, config.admins, parts[1])
         await message.answer(f"Рассылка завершена: {stats}")
 
+    async def setup_commands():
+        base_cmds = [
+            ("start", "Начать"),
+            ("help", "Справка"),
+            ("ping", "Проверка"),
+            ("echo", "Эхо текст"),
+            ("fun", "Случайная фраза"),
+            ("groupinfo", "Инфо о группе"),
+            ("whoami", "Ваш ID"),
+            ("id", "То же что /whoami"),
+        ]
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in base_cmds if c not in {"groupinfo"}],
+            scope=BotCommandScopeAllPrivateChats()
+        )
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in base_cmds],
+            scope=BotCommandScopeAllGroupChats()
+        )
+
     print("Запуск бота...")
+    await setup_commands()
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
