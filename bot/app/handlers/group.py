@@ -3,6 +3,7 @@ import logging
 from aiogram import Router, F
 from aiogram.types import ChatMemberUpdated, Message
 from aiogram.filters import Command
+from aiogram.exceptions import TelegramBadRequest
 
 router = Router(name="group")
 logger = logging.getLogger(__name__)
@@ -33,3 +34,29 @@ async def cmd_groupinfo(message: Message):
 @router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower().contains("бот"))
 async def react_on_word(message: Message):
     await message.reply("Я слышу слово 'бот' – я тут. /help")
+
+@router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower() == "зов")
+async def cmd_zov(message: Message):
+    try:
+        # Get chat members
+        chat_id = message.chat.id
+        # Try to mention all chat members
+        admins = await message.bot.get_chat_administrators(chat_id)
+        admin_ids = [admin.user.id for admin in admins]
+        
+        # Create mention string for all admins
+        mentions = " ".join([f"<a href='tg://user?id={admin_id}'>‌</a>" for admin_id in admin_ids])
+        
+        # Send message with mentions
+        await message.answer(
+            f"сука быстрее все сюда нахуй{mentions}",
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as e:
+        if "BUTTON_USER_PRIVACY_RESTRICTED" in str(e):
+            await message.answer("сука быстрее все сюда нахуй")
+        else:
+            logger.error(f"Error in zov command: {e}")
+    except Exception as e:
+        logger.error(f"Error in zov command: {e}")
+        await message.answer("сука быстрее все сюда нахуй")
