@@ -1,0 +1,100 @@
+# Fan Telegram Bot
+
+Простой фан-бот для корпоративного чата (Telegram) на `aiogram`.
+
+## Возможности (первоначальные)
+- Команда /start с приветствием
+- Команда /help с описанием
+- Команда /ping -> pong
+- Реакция на упоминание бота
+- Рандомные фразы /fun
+- Простая команда /echo <текст>
+- Админ-команда /broadcast <текст>
+
+## Планируемое
+- Мемы /meme
+- Inline-режим (поиск цитат)
+- Хранение пользовательских счетчиков
+- Мини-игры
+
+## Установка
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env  # и вставьте реальный токен
+```
+
+## Запуск
+```bash
+python run.py
+```
+
+## Переменные окружения (.env)
+- BOT_TOKEN=токен бота (НЕ коммитить реальный)
+- ADMINS=список user_id через запятую
+
+## Структура
+```
+bot/
+  run.py
+  app/__init__.py
+  app/config.py
+  app/handlers/basic.py
+  app/handlers/fun.py
+  app/middlewares/__init__.py
+  app/utils/broadcast.py
+  requirements.txt
+  .env.example
+```
+
+## Безопасность
+Никогда не публикуйте реальный токен в репозитории. Используйте `.env`.
+
+## Деплой на Railway
+Есть два основных варианта: (1) через Dockerfile (уже добавлен в корень) или (2) авто‑сборка (Nixpacks). Мы подготовили Dockerfile — это самый предсказуемый способ.
+
+### 1. Подготовка репозитория
+Убедитесь, что в корне репозитория (где `.git/`) лежит папка `bot/` и файл `Dockerfile`.
+
+### 2. Push в GitHub (пример)
+```powershell
+git init
+git remote add origin https://github.com/USERNAME/REPO.git
+git add .
+git commit -m "Initial fan bot"
+git branch -M main
+git push -u origin main
+```
+
+### 3. Создание сервиса на Railway
+1. Зайти в Railway -> New Project -> Deploy from GitHub Repo -> выбрать репозиторий.
+2. Railway увидит `Dockerfile` и соберёт образ.
+3. В разделе Variables добавить переменные:
+  - `BOT_TOKEN` = (токен бота)
+  - `ADMINS` = `123456789` (или список uid через запятую)
+4. Рестарт сервиса после добавления переменных.
+
+### 4. Логи
+Открыть вкладку Logs — должна появиться строка `Запуск бота...`.
+
+### 5. Обновление
+Любые изменения: `git commit` + `git push` => Railway автоматически пересоберёт и перезапустит контейнер.
+
+### Если нужен деплой без Docker
+Удалите/игнорируйте `Dockerfile`, добавьте `runtime.txt` с `python-3.12.5`, убедитесь, что корень с `bot/` содержит `bot/requirements.txt`. Railway сам установит зависимости (Nixpacks). Command: `python bot/run.py`.
+
+### Graceful shutdown
+`aiogram` корректно завершает polling по SIGTERM, который Railway шлёт при перезапуске.
+
+### Диагностика проблем
+| Проблема | Что проверить |
+|----------|---------------|
+| Бот не отвечает | Токен верный? Есть ли блок в логах? |
+| Ошибка 401 | Токен отозван BotFather / неверный |
+| Unicode ошибки | Убедитесь, что файл сохранён в UTF-8 |
+| Нет зависимостей | Пересоберите: Redeploy в Railway |
+
+### Безопасность токена
+Только Railway Variables. Никогда не коммить `.env`. Если токен утёк — `@BotFather` -> `/revoke`.
+
