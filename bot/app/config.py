@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 class Config:
     bot_token: str
     admins: List[int]
+    openai_api_key: str
 
 
 def load_config(env_file: str = ".env") -> Config:
@@ -18,7 +19,8 @@ def load_config(env_file: str = ".env") -> Config:
         raise RuntimeError("BOT_TOKEN не задан. Добавьте его в .env")
     admins_raw = os.getenv("ADMINS", "")
     admins = [int(x) for x in admins_raw.split(',') if x.strip().isdigit()]
-    return Config(bot_token=token, admins=admins)
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    return Config(bot_token=token, admins=admins, openai_api_key=openai_key)
 
 
 def format_user_mention(user) -> str:

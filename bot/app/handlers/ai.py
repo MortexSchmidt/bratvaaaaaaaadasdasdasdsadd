@@ -4,22 +4,12 @@ from aiogram.types import Message
 import re
 import random
 import logging
+from openai import OpenAI
+from app.config import load_config
 
 router = Router(name="ai")
+config = load_config()
 
-# Some example responses for when we can't reach a real AI API
-EXAMPLE_RESPONSES = [
-    "Я подумаю над этим и дам тебе знать позже",
-    "Интересный вопрос! Дай мне немного времени",
-    "Я бы с радостью помогла, но сейчас немного занята. Попробуй позже",
-    "Хм, неплохой вопрос. Что ты уже знаешь об этом?",
-    "Я не эксперт в этом, но могу попробовать помочь. Расскажи подробнее",
-    "Отличный вопрос! Я посмотрю, что можно сделать",
-    "Я бы хотела помочь, но мне нужно больше информации",
-    "Это заставляет задуматься. Что ты хочешь узнать конкретно?",
-    "Звучит интересно! Давай разберемся вместе",
-    "Хорошая тема для обсуждения! Поделись мыслями",
-]
 
 # Pattern to detect when someone is talking to Milana
 MILANA_PATTERNS = [
@@ -67,19 +57,16 @@ async def ai_milana(message: Message):
                 request_text = re.sub(r"милан[а|у|ой|е]", "", user_text, flags=re.IGNORECASE).strip()
                 break
 
-        # For now, we'll use simulated responses since we don't have a real AI API key
-        # In a real implementation, you would connect to an AI API like OpenAI here
-        response = get_simulated_ai_response(request_text)
+        # Get real AI response
+        ai_response = get_ai_response(request_text, user_name)
 
-        # Add some personality to responses
-        personality_responses = [
-            f"{user_mention}, {response.lower()}",
-            f"{response} {user_mention} 😉",
-            f"{user_mention}, давай разберемся! {response.lower()}",
-        ]
-
-        # Choose response with some randomness
-        final_response = random.choice(personality_responses)
+        # Format the final response with user mention
+        if ai_response.startswith("Извини") or "проблемы" in ai_response:
+            # Error message - don't add extra formatting
+            final_response = ai_response
+        else:
+            # Normal response - add user mention at the beginning
+            final_response = f"{user_mention}, {ai_response}"
 
         # Send the response
         await message.answer(final_response, parse_mode="HTML")
@@ -89,81 +76,39 @@ async def ai_milana(message: Message):
         # Fallback response with user mention
         user_name = message.from_user.first_name or "друг"
         user_mention = f"<a href='tg://user?id={message.from_user.id}'>{user_name}</a>"
-        await message.answer(f"{user_mention}, извини, у меня технические проблемы. Попробуй позже.", parse_mode="HTML")
+        await message.answer(f"{user_mention}, извини, у меня технические проблемы с ИИ. Попробуй позже.", parse_mode="HTML")
 
-def get_simulated_ai_response(request_text: str) -> str:
+def get_ai_response(request_text: str, user_name: str) -> str:
     """
-    Simulate an AI response. In a real implementation, this would connect to an AI API.
+    Get real AI response from OpenAI API
     """
-    # Clean the request text
-    clean_request = request_text.lower().strip()
+    if not config.openai_api_key:
+        return "Извини, у меня не настроен ИИ. Добавь OPENAI_API_KEY в .env файл."
 
-    # Homework and study related
-    if any(word in clean_request for word in ["домашк", "задани", "урок", "учеб"]):
-        homework_responses = [
-            f"Домашка? Я помогу! Расскажи, что именно нужно сделать с '{clean_request}'.",
-            f"С домашним заданием разберемся вместе. Что у тебя за предмет?",
-            f"Я люблю помогать с уроками! Покажи задание, разберем по шагам.",
-            f"Домашка - это важно! Давай посмотрим, что у тебя не получается.",
-        ]
-        return random.choice(homework_responses)
+    try:
+        client = OpenAI(api_key=config.openai_api_key)
 
-    # Math related
-    elif any(word in clean_request for word in ["матем", "алгебр", "геометр", "пример", "задач", "уравн"]):
-        math_responses = [
-            "Математика - это интересно! Покажи задачу, решим вместе.",
-            "С числами я на ты! Что за пример нужно решить?",
-            "Математика любит терпеливых. Давай разберем задачу шаг за шагом.",
-            "Геометрия или алгебра? Я помогу с любым разделом математики!",
-        ]
-        return random.choice(math_responses)
+        # Create system message for Milana's personality
+        system_message = """Ты - Милана, дружелюбная и умная девушка-помощник в Telegram боте.
+        Ты всегда вежливая, позитивная и готова помочь. Ты общаешься на русском языке.
+        Ты можешь помогать с домашними заданиями, объяснять сложные темы, отвечать на вопросы.
+        Будь естественной в общении, как настоящая подруга."""
 
-    # Russian language related
-    elif any(word in clean_request for word in ["русск", "литератур", "сочинени", "диктант", "грамматик"]):
-        russian_responses = [
-            "Русский язык - мой любимый предмет! С чем помочь?",
-            "Литература или грамматика? Я готова разбирать любое произведение.",
-            "Сочинение или изложение? Давай напишем вместе красивый текст.",
-            "Русский язык - это искусство слов. Что нужно разобрать?",
-        ]
-        return random.choice(russian_responses)
+        # Create user message
+        user_message = f"Меня зовут {user_name}. Мой вопрос: {request_text}"
 
-    # Questions starting with что/как/почему/зачем
-    elif any(clean_request.startswith(word) for word in ["что ", "как ", "почему ", "зачем "]):
-        question_responses = [
-            "Хороший вопрос! Давай разберемся вместе.",
-            "Интересно узнать! Я помогу найти ответ.",
-            "Вопросы - это всегда хорошо. Попробуем разобраться.",
-            "Люблю отвечать на вопросы! Слушаю внимательно.",
-        ]
-        return random.choice(question_responses)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
 
-    # General help requests
-    elif any(word in clean_request for word in ["помоги", "не могу", "не знаю", "объясни"]):
-        help_responses = [
-            "Конечно помогу! Расскажи подробнее, что именно нужно.",
-            "Не переживай, вместе разберемся. Что случилось?",
-            "Я здесь, чтобы помочь! Опиши проблему подробнее.",
-            "Помощь нужна? Я готова выслушать и помочь найти решение.",
-        ]
-        return random.choice(help_responses)
+        return response.choices[0].message.content.strip()
 
-    # Simple greetings or mentions
-    elif clean_request in ["", "милана", "милану", "миланой", "милане"]:
-        greeting_responses = [
-            "Да, я здесь! Чем могу помочь?",
-            "Слушаю тебя внимательно. Что нужно?",
-            "Я готова помочь! Расскажи, что случилось.",
-            "Привет! Чем могу быть полезна сегодня?",
-        ]
-        return random.choice(greeting_responses)
-
-    else:
-        # General response for other topics
-        general_responses = [
-            f"Интересная тема '{clean_request}'! Давай обсудим.",
-            "Хм, звучит интересно. Расскажи подробнее!",
-            "Я люблю узнавать новое. Что ты хочешь обсудить?",
-            "Тема интересная! Поделись деталями, я постараюсь помочь.",
-        ]
-        return random.choice(general_responses)
+    except Exception as e:
+        logging.error(f"Error calling OpenAI API: {e}")
+        return "Извини, у меня проблемы с ИИ. Попробуй позже или спроси что-то попроще."
