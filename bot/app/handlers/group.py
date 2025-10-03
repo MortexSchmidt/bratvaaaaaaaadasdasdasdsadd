@@ -37,13 +37,15 @@ async def cmd_groupinfo(message: Message):
 @router.message(F.chat.type.in_({"group", "supergroup"}) & F.text.lower().contains("бот"))
 async def react_on_word(message: Message):
     try:
-        # Get chat admins and mention them
-        admins = await message.bot.get_chat_administrators(message.chat.id)
-        admin_ids = [admin.user.id for admin in admins]
-        mentions = " ".join([f"<a href='tg://user?id={admin_id}'>‌</a>" for admin_id in admin_ids])
+        # Get all chat members and mention them
+        members = []
+        async for member in message.bot.get_chat_members(message.chat.id):
+            members.append(member.user.id)
+        mentions = " ".join([f"<a href='tg://user?id={user_id}'>‌</a>" for user_id in members])
         await message.reply(f"сука быстрее все сюда нахуй{mentions}", parse_mode="HTML")
     except Exception:
-        await message.reply("сука быстрее все сюда нахуй")
+        # Fallback to @all
+        await message.reply("сука быстрее все сюда нахуй @all")
 
 @router.message(lambda message: message.text and message.text.lower() == "зов")
 async def cmd_zov(message: Message):
