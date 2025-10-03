@@ -82,10 +82,15 @@ def get_ai_response(request_text: str, user_name: str) -> str:
     """
     Get real AI response from OpenAI API
     """
-    if not config.openai_api_key:
-        return "Извини, у меня не настроен ИИ. Добавь OPENAI_API_KEY в .env файл."
-
     try:
+        # Check if API key exists
+        if not config.openai_api_key:
+            logging.error("OpenAI API key not found in config")
+            return "Извини, у меня не настроен ИИ. Добавь OPENAI_API_KEY в .env файл."
+
+        logging.info(f"OpenAI API key found, length: {len(config.openai_api_key)}")
+
+        # Initialize OpenAI client
         client = OpenAI(api_key=config.openai_api_key)
 
         # Create system message for Milana's personality
@@ -97,6 +102,8 @@ def get_ai_response(request_text: str, user_name: str) -> str:
         # Create user message
         user_message = f"Меня зовут {user_name}. Мой вопрос: {request_text}"
 
+        logging.info(f"Sending request to OpenAI for user {user_name}: {request_text[:50]}...")
+
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -107,8 +114,10 @@ def get_ai_response(request_text: str, user_name: str) -> str:
             temperature=0.7
         )
 
-        return response.choices[0].message.content.strip()
+        ai_response = response.choices[0].message.content.strip()
+        logging.info(f"Received response from OpenAI: {ai_response[:50]}...")
+        return ai_response
 
     except Exception as e:
-        logging.error(f"Error calling OpenAI API: {e}")
+        logging.error(f"Error calling OpenAI API: {type(e).__name__}: {e}")
         return "Извини, у меня проблемы с ИИ. Попробуй позже или спроси что-то попроще."
