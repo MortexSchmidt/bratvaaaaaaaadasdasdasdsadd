@@ -24,8 +24,8 @@ def save_data(data: Dict):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-@router.message(Command(commands=["дрочка", "дрочить"]))
-async def cmd_drочка(message: Message):
+async def perform_drочка(message: Message):
+    """Perform the drочка action"""
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.full_name or "Аноним"
     
@@ -82,6 +82,15 @@ async def cmd_drочка(message: Message):
         response += f"Следующая возможность через: {hours} ч {minutes} мин"
     
     await message.answer(response)
+
+@router.message(Command(commands=["дрочка", "дрочить"]))
+async def cmd_drочка(message: Message):
+    await perform_drочка(message)
+
+# React to the word "дроч" in messages
+@router.message(lambda message: message.text and "дроч" in message.text.lower())
+async def word_drоч(message: Message):
+    await perform_drочка(message)
 
 @router.message(Command(commands=["статистика_дрочка", "дрочка_статы"]))
 async def cmd_drочка_stats(message: Message):
