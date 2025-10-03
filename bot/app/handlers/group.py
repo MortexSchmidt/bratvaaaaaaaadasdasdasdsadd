@@ -53,20 +53,19 @@ async def cmd_zov(message: Message):
         return
         
     try:
-        # Get chat administrators
+        # Get all chat members
         chat_id = message.chat.id
-        admins = await message.bot.get_chat_administrators(chat_id)
-        mentions = []
-        
-        for admin in admins:
-            user = admin.user
+        members = []
+        async for member in message.bot.get_chat_members(chat_id):
+            user = member.user
             if user.username:
                 # Use username if available (clickable)
-                mentions.append(f"@{user.username}")
+                members.append(f"@{user.username}")
             else:
                 # Use HTML link to user if no username
                 name = user.first_name or "Пользователь"
-                mentions.append(f"<a href='tg://user?id={user.id}'>{name}</a>")
+                members.append(f"<a href='tg://user?id={user.id}'>{name}</a>")
+        mentions = members
         
         # Join all mentions with commas
         mentions_text = ", ".join(mentions)
