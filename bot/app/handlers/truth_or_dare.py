@@ -263,13 +263,15 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             for player_id in players:
                 name = player_names.get(player_id, "Игрок")
-                lobby_text += f"• {name}\n"
+                link = get_player_name_link(player_id, player_names)
+                lobby_text += f"• {link}\n"
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
 
             # Send lobby message and store message_id
             lobby_message = await callback.message.edit_text(
                 lobby_text,
+                parse_mode='HTML',
                 reply_markup=create_lobby_keyboard(is_creator=True)
             )
             lobbies[chat_id]["message_id"] = lobby_message.message_id
@@ -478,6 +480,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             is_creator = player_id == lobby["creator"]
             await callback.message.edit_text(
                 lobby_text,
+                parse_mode='HTML',
                 reply_markup=create_lobby_keyboard(is_creator)
             )
 
@@ -735,6 +738,7 @@ async def join_truth_or_dare(message: Message, bot: Bot):
                     chat_id=chat_id,
                     message_id=lobby["message_id"],
                     text=lobby_text,
+                    parse_mode='HTML',
                     reply_markup=create_lobby_keyboard(player_id == lobby["creator"])
                 )
             except:
