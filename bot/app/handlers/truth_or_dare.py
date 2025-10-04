@@ -495,6 +495,9 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
 
+            # Define joining player early
+            joining_player_id = callback.from_user.id
+            
             # Check if joining player is the creator - show start button accordingly
             is_creator = joining_player_id == lobby["creator"]
             # Update the main lobby message in the group chat
@@ -513,7 +516,6 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 await callback.message.answer(lobby_text, reply_markup=create_lobby_keyboard(is_creator), parse_mode='HTML', disable_web_page_preview=True)
             
             # Notify all lobby members about the new join (except the joining player)
-            joining_player_id = callback.from_user.id
             for player_id in lobby["players"]:
                 if player_id != joining_player_id:  # Skip the joining player
                     try:
