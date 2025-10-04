@@ -30,7 +30,7 @@ UNLIMITED_PASSES = float('inf')  # Неограниченные пасы без 
 
 # Game state storage
 active_games: Dict[int, Dict] = {}  # Stores active games by chat_id
-game_invites: Dict[int, Dict] = {}  # Stores game invite info
+lobbies: Dict[int, Dict] = {}  # Stores lobbies by chat_id
 waiting_for_input: Dict[int, Dict] = {}  # Tracks players waiting to send truth/dare
 
 class TruthOrDareGame:
@@ -133,6 +133,17 @@ def create_difficulty_keyboard():
 
     return builder.as_markup()
 
+def create_lobby_keyboard(is_creator: bool = False):
+    """Create keyboard for lobby"""
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="🎮 Играть", callback_data="tod:lobby:join")
+    if is_creator:
+        builder.button(text="🚀 Начать игру", callback_data="tod:lobby:start")
+    builder.adjust(2)
+
+    return builder.as_markup()
+
 def get_player_name_link(player_id: int, player_names: Dict[int, str]) -> str:
     """Get a link to the player using Telegram's user linking feature"""
     name = player_names.get(player_id, "Игрок")
@@ -165,18 +176,17 @@ def get_random_content(content_type: str, difficulty: str = None) -> tuple[str, 
 async def start_truth_or_dare(message: Message):
     """Start a new Truth or Dare game"""
     chat_id = message.chat.id
-    
-    # Check if there's already a game in this chat
-    if chat_id in active_games:
-        await message.answer("В этом чате уже идет игра! Дождитесь её окончания.")
+
+    # Check if there's already a game or lobby in this chat
+    if chat_id in active_games or chat_id in lobbies:
+        await message.answer("В этом чате уже идет игра или есть активное лобби! Дождитесь окончания или используйте /end_tod.")
         return
     
-    # Initialize game with just the starter
+    # Initialize lobby with just the starter
     starter_id = message.from_user.id
     starter_name = message.from_user.first_name or message.from_user.username or "Игрок"
-    game_invites[chat_id] = {
+    lobbies[chat_id] = {
         "players": [starter_id],
-        "starter": starter_id,
         "player_names": {starter_id: starter_name}
     }
     
@@ -203,9 +213,9 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
         mode = data_parts[2]
         
         # Store the selected mode temporarily
-        if chat_id not in game_invites:
-            game_invites[chat_id] = {}
-        game_invites[chat_id]["mode"] = mode
+        if chat_id not in lobbies:
+            lobbies[chat_id] = {}
+        lobbies[chat_id]["mode"] = mode
         
         # Ask for rules mode
         await callback.message.edit_text(
@@ -222,39 +232,48 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
         rules_mode = data_parts[2]
         
         # Get the mode from stored data
-        if chat_id in game_invites and "mode" in game_invites[chat_id]:
-            mode = game_invites[chat_id]["mode"]
-            players = game_invites[chat_id]["players"]
-            player_names = game_invites[chat_id].get("player_names", {})
+        if chat_id in lobbies and "mode" in lobbies[chat_id]:
+            mode = lobbies[chat_id]["mode"]
+            players = lobbies[chat_id]["players"]
+            player_names = lobbies[chat_id].get("player_names", {})
 
-            # Create a new game
-            game = TruthOrDareGame(chat_id, players, mode, rules_mode, player_names)
-            active_games[chat_id] = game
-            
-            # Notify about game start
+            # Create lobby instead of game
+            lobbies[chat_id] = {
+                "mode": mode,
+                "rules_mode": rules_mode,
+                "creator": players[0],
+                "players": players.copy(),
+                "player_names": player_names.copy(),
+                "message_id": None  # Will be set when sending lobby message
+            }
+
+            # Create lobby message
             rules_description = ""
             if rules_mode == MODE_WITH_RULES:
-                rules_description = (
-                    "\n📜 <b>Правила игры:</b>\n"
-                    "• Никаких сексуальных, насильственных, оскорбительных или опасных заданий\n"
-                    "• Запрещено заставлять делать то, что может привести к травме, нарушить закон или задеть чувства человека\n"
-                    "• Пас можно использовать 1 раз за игру\n\n"
-                )
+                rules_description = "С правилами ✅"
             else:
-                rules_description = (
-                    "\n📜 <b>Правила игры:</b>\n"
-                    "• Пас можно использовать неограниченное количество раз\n\n"
-                )
-            
-            await callback.message.edit_text(
-                f"🚀 <b>Игра 'Правда или Действие 2.0' началась!</b> 🚀\n\n"
+                rules_description = "Без правил ❌"
+
+            lobby_text = (
+                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
                 f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
-                f"📜 <b>Правила:</b> {'С правилами ✅' if rules_mode == MODE_WITH_RULES else 'Без правил ❌'}\n"
-                f"{rules_description}\n"
-                f"👤 <b>Ход игрока:</b> {get_player_name_link(game.get_current_player(), game.player_names)}\n\n"
-                f"➕ <i>Другие игроки могут присоединиться командой</i> <code>/join_tod</code>"
+                f"📜 <b>Правила:</b> {rules_description}\n\n"
+                f"👥 <b>Игроки ({len(players)}):</b>\n"
             )
-            
+
+            for player_id in players:
+                name = player_names.get(player_id, "Игрок")
+                lobby_text += f"• {name}\n"
+
+            lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
+
+            # Send lobby message and store message_id
+            lobby_message = await callback.message.edit_text(
+                lobby_text,
+                reply_markup=create_lobby_keyboard(is_creator=True)
+            )
+            lobbies[chat_id]["message_id"] = lobby_message.message_id
+
             await callback.answer()
         else:
             await callback.answer("Ошибка при создании игры!", show_alert=True)
@@ -413,6 +432,112 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
         await callback.answer()
 
+    elif action == "lobby":
+        sub_action = data_parts[2]
+
+        if sub_action == "join":
+            # Join lobby
+            player_id = callback.from_user.id
+            player_name = callback.from_user.first_name or callback.from_user.username or "Игрок"
+
+            if chat_id not in lobbies:
+                await callback.answer("Лобби не найдено!", show_alert=True)
+                return
+
+            lobby = lobbies[chat_id]
+            if player_id in lobby["players"]:
+                await callback.answer("Вы уже в лобби!", show_alert=True)
+                return
+
+            # Add player to lobby
+            lobby["players"].append(player_id)
+            lobby["player_names"][player_id] = player_name
+
+            # Update lobby message
+            mode = lobby["mode"]
+            rules_mode = lobby["rules_mode"]
+            players = lobby["players"]
+            player_names = lobby["player_names"]
+
+            rules_description = "С правилами ✅" if rules_mode == MODE_WITH_RULES else "Без правил ❌"
+
+            lobby_text = (
+                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {rules_description}\n\n"
+                f"👥 <b>Игроки ({len(players)}):</b>\n"
+            )
+
+            for pid in players:
+                name = player_names.get(pid, "Игрок")
+                lobby_text += f"• {name}\n"
+
+            lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
+
+            # Check if creator is viewing - show start button
+            is_creator = player_id == lobby["creator"]
+            await callback.message.edit_text(
+                lobby_text,
+                reply_markup=create_lobby_keyboard(is_creator)
+            )
+
+            # Notify about join
+            await callback.message.answer(
+                f"🎉 <b>{player_name} присоединился к лобби!</b>"
+            )
+
+            await callback.answer()
+
+        elif sub_action == "start":
+            # Start game from lobby
+            player_id = callback.from_user.id
+
+            if chat_id not in lobbies:
+                await callback.answer("Лобби не найдено!", show_alert=True)
+                return
+
+            lobby = lobbies[chat_id]
+            if player_id != lobby["creator"]:
+                await callback.answer("Только создатель может начать игру!", show_alert=True)
+                return
+
+            if len(lobby["players"]) < 2:
+                await callback.answer("Нужно минимум 2 игрока!", show_alert=True)
+                return
+
+            # Create game from lobby
+            game = TruthOrDareGame(chat_id, lobby["players"], lobby["mode"], lobby["rules_mode"], lobby["player_names"])
+            active_games[chat_id] = game
+
+            # Remove lobby
+            del lobbies[chat_id]
+
+            # Notify about game start
+            rules_description = ""
+            if game.rules_mode == MODE_WITH_RULES:
+                rules_description = (
+                    "\n📜 <b>Правила игры:</b>\n"
+                    "• Никаких сексуальных, насильственных, оскорбительных или опасных заданий\n"
+                    "• Запрещено заставлять делать то, что может привести к травме, нарушить закон или задеть чувства человека\n"
+                    "• Пас можно использовать 1 раз за игру\n\n"
+                )
+            else:
+                rules_description = (
+                    "\n📜 <b>Правила игры:</b>\n"
+                    "• Пас можно использовать неограниченное количество раз\n\n"
+                )
+
+            await callback.message.edit_text(
+                f"🚀 <b>Игра 'Правда или Действие 2.0' началась!</b> 🚀\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if game.mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {'С правилами ✅' if game.rules_mode == MODE_WITH_RULES else 'Без правил ❌'}\n"
+                f"{rules_description}\n"
+                f"👤 <b>Ход игрока:</b> {get_player_name_link(game.get_current_player(), game.player_names)}\n\n"
+                f"🎮 <i>Игра началась! Удачи всем участникам!</i>"
+            )
+
+            await callback.answer()
+
     elif action == "target":
         # Handle target player selection (for "anyone" mode)
         target_player_id = int(data_parts[2])
@@ -505,52 +630,60 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
 @router.message(Command(commands=["end_tod", "stop_tod"]))
 async def end_truth_or_dare(message: Message):
-    """End the current Truth or Dare game"""
+    """End the current Truth or Dare game/lobby"""
     chat_id = message.chat.id
-    
-    if chat_id not in active_games:
-        await message.answer("В этом чате нет активной игры 'Правда или действие'!")
-        return
-    
-    # Check if the command sender is the game creator or an admin
-    game = active_games[chat_id]
-    game_creator = game.players[0]  # First player is considered the creator
     sender_id = message.from_user.id
-    
-    # In a real implementation, we'd also check if sender is an admin
-    if sender_id != game_creator:
-        await message.answer("Только создатель игры может завершить игру!")
-        return
-    
-    # Remove the game
-    del active_games[chat_id]
-    
-    # Clear any waiting states
-    for player_id in list(waiting_for_input.keys()):
-        if waiting_for_input[player_id]["game_chat_id"] == chat_id:
-            del waiting_for_input[player_id]
-    
-    await message.answer("🎮 Игра 'Правда или действие' завершена!")
 
-# Handler for joining a game
+    if chat_id in active_games:
+        # End active game
+        game = active_games[chat_id]
+        game_creator = game.players[0]  # First player is considered the creator
+
+        if sender_id != game_creator:
+            await message.answer("Только создатель игры может завершить игру!")
+            return
+
+        # Remove the game
+        del active_games[chat_id]
+
+        # Clear any waiting states
+        for player_id in list(waiting_for_input.keys()):
+            if waiting_for_input[player_id]["game_chat_id"] == chat_id:
+                del waiting_for_input[player_id]
+
+        await message.answer("🎮 Игра 'Правда или действие' завершена!")
+
+    elif chat_id in lobbies:
+        # End lobby
+        lobby = lobbies[chat_id]
+        lobby_creator = lobby["creator"]
+
+        if sender_id != lobby_creator:
+            await message.answer("Только создатель лобби может его закрыть!")
+            return
+
+        # Remove the lobby
+        del lobbies[chat_id]
+
+        await message.answer("🎉 Лобби 'Правда или действие' закрыто!")
+
+    else:
+        await message.answer("В этом чате нет активной игры или лобби 'Правда или действие'!")
+
+# Handler for joining a game (legacy command, now uses buttons)
 @router.message(Command(commands=["join_tod"]))
-async def join_truth_or_dare(message: Message):
-    """Allow a player to join an existing game"""
+async def join_truth_or_dare(message: Message, bot: Bot):
+    """Allow a player to join an existing lobby/game"""
     chat_id = message.chat.id
     player_id = message.from_user.id
-    
-    if chat_id not in active_games and chat_id not in game_invites:
-        await message.answer("В этом чате нет активной игры 'Правда или действие'!")
-        return
-    
-    # Check if it's an active game
+
     if chat_id in active_games:
         game = active_games[chat_id]
-        
+
         if player_id in game.players:
             await message.answer("Вы уже в этой игре!")
             return
-        
+
         # Add player to the game
         player_name = message.from_user.first_name or message.from_user.username or "Игрок"
         game.players.append(player_id)
@@ -559,24 +692,61 @@ async def join_truth_or_dare(message: Message):
 
         # Notify all players about the new join
         await message.answer(
-            f"🎉 <b>{get_player_name_link(player_id, game.player_names)} присоединился к игре!</b>\n"
+            f"🎉 <b>{player_name} присоединился к игре!</b>\n"
             f"👥 Всего игроков: {len(game.players)}\n\n"
             f"🎮 Продолжаем веселье!"
         )
-    else:  # Game still being set up invites
-        if player_id in game_invites[chat_id]["players"]:
-            await message.answer("Вы уже в этой игре!")
+    elif chat_id in lobbies:
+        lobby = lobbies[chat_id]
+
+        if player_id in lobby["players"]:
+            await message.answer("Вы уже в лобби!")
             return
-        
+
+        # Add player to lobby
         player_name = message.from_user.first_name or message.from_user.username or "Игрок"
-        game_invites[chat_id]["players"].append(player_id)
-        game_invites[chat_id]["player_names"][player_id] = player_name
+        lobby["players"].append(player_id)
+        lobby["player_names"][player_id] = player_name
+
+        # Update lobby message if exists
+        if lobby.get("message_id"):
+            mode = lobby["mode"]
+            rules_mode = lobby.get("rules_mode", MODE_WITHOUT_RULES)
+            players = lobby["players"]
+            player_names = lobby["player_names"]
+
+            rules_description = "С правилами ✅" if rules_mode == MODE_WITH_RULES else "Без правил ❌"
+
+            lobby_text = (
+                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {rules_description}\n\n"
+                f"👥 <b>Игроки ({len(players)}):</b>\n"
+            )
+
+            for pid in players:
+                name = player_names.get(pid, "Игрок")
+                lobby_text += f"• {name}\n"
+
+            lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
+
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=lobby["message_id"],
+                    text=lobby_text,
+                    reply_markup=create_lobby_keyboard(player_id == lobby["creator"])
+                )
+            except:
+                pass  # Message might be too old to edit
 
         await message.answer(
-            f"🎉 <b>{get_player_name_link(player_id, game_invites[chat_id]['player_names'])} присоединился к игре!</b>\n"
-            f"👥 Всего игроков: {len(game_invites[chat_id]['players'])}\n\n"
-            f"🎮 Готовимся к старту!"
+            f"🎉 <b>{player_name} присоединился к лобби!</b>\n"
+            f"👥 Всего игроков: {len(lobby['players'])}\n\n"
+            f"🎮 Используйте кнопку 'Играть' в лобби!"
         )
+    else:
+        await message.answer("В этом чате нет активного лобби или игры 'Правда или действие'!\n\nИспользуйте /truthordare чтобы создать лобби.")
 
 # Main handler for all messages
 @router.message()
