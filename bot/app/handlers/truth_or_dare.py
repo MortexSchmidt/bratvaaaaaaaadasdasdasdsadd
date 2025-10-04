@@ -34,12 +34,13 @@ lobbies: Dict[int, Dict] = {}  # Stores lobbies by chat_id
 waiting_for_input: Dict[int, Dict] = {}  # Tracks players waiting to send truth/dare
 
 class TruthOrDareGame:
-    def __init__(self, chat_id: int, players: List[int], mode: str, rules_mode: str, player_names: Dict[int, str]):
+    def __init__(self, chat_id: int, players: List[int], mode: str, rules_mode: str, player_names: Dict[int, str], player_usernames: Dict[int, str] = None):
         self.chat_id = chat_id
         self.players = players  # List of player IDs
         self.mode = mode  # Game mode: clockwise or anyone
         self.rules_mode = rules_mode # With rules or without rules
         self.player_names = player_names  # Dict of player_id to name
+        self.player_usernames = player_usernames or {}  # Dict of player_id to username
         self.current_player_index = 0 # Index of current player
         self.passes_used: Dict[int, int] = {player_id: 0 for player_id in players}  # Track used passes (count)
         self.game_active = True
@@ -144,10 +145,12 @@ def create_lobby_keyboard(is_creator: bool = False):
 
     return builder.as_markup()
 
-def get_player_name_link(player_id: int, player_names: Dict[int, str]) -> str:
-    """Get a link to the player using Telegram's user linking feature"""
+def get_player_name_link(player_id: int, player_names: Dict[int, str], player_usernames: Dict[int, str] = None) -> str:
+    """Get a link to the player - returns @username if available, otherwise just name"""
     name = player_names.get(player_id, "Игрок")
-    return f'<a href="tg://user?id={player_id}">{name}</a>'
+    if player_usernames and player_id in player_usernames and player_usernames[player_id]:
+        return f"@{player_usernames[player_id]}"
+    return name
 
 def get_random_content(content_type: str, difficulty: str = None) -> tuple[str, str]:
     """Get random truth or dare content. Returns (content, actual_type)"""
@@ -184,10 +187,12 @@ async def start_truth_or_dare(message: Message):
     
     # Initialize lobby with just the starter
     starter_id = message.from_user.id
-    starter_name = message.from_user.first_name or message.from_user.username or "Игрок"
+    starter_name = message.from_user.first_name or "Игрок"
+    starter_username = message.from_user.username
     lobbies[chat_id] = {
         "players": [starter_id],
-        "player_names": {starter_id: starter_name}
+        "player_names": {starter_id: starter_name},
+        "player_usernames": {starter_id: starter_username}
     }
     
     # Send message asking for game mode selection
@@ -236,6 +241,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             mode = lobbies[chat_id]["mode"]
             players = lobbies[chat_id]["players"]
             player_names = lobbies[chat_id].get("player_names", {})
+            player_usernames = lobbies[chat_id].get("player_usernames", {})
 
             # Create lobby instead of game
             lobbies[chat_id] = {
@@ -244,6 +250,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 "creator": players[0],
                 "players": players.copy(),
                 "player_names": player_names.copy(),
+                "player_usernames": player_usernames.copy(),
                 "message_id": None  # Will be set when sending lobby message
             }
 
@@ -263,15 +270,13 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             for player_id in players:
                 name = player_names.get(player_id, "Игрок")
-                link = get_player_name_link(player_id, player_names)
-                lobby_text += f"• {link}\n"
+                lobby_text += f"• {name}\n"
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
 
             # Send lobby message and store message_id
             lobby_message = await callback.message.edit_text(
                 lobby_text,
-                parse_mode='HTML',
                 reply_markup=create_lobby_keyboard(is_creator=True)
             )
             lobbies[chat_id]["message_id"] = lobby_message.message_id
@@ -311,8 +316,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 game.set_current_player(next_player_id)
                 
                 await callback.message.edit_text(
-                    f"⏭️ {get_player_name_link(current_player_id, game.player_names)} использовал пас!\n"
-                    f"Ход передан игроку: {get_player_name_link(next_player_id, game.player_names)}"
+                    f"⏭️ {get_player_name_link(current_player_id, game.player_names, game.player_usernames)} использовал пас!\n"
+                    f"Ход передан игроку: {get_player_name_link(next_player_id, game.player_names, game.player_usernames)}"
                 )
                 
                 await callback.answer("Вы использовали пас!")
@@ -323,7 +328,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             # Ask for difficulty level
             await callback.message.edit_text(
                 f"🎲 <b>Случайное задание!</b>\n\n"
-                f"👤 {get_player_name_link(current_player_id, game.player_names)}, выберите уровень остроты:\n\n"
+                f"👤 {get_player_name_link(current_player_id, game.player_names, game.player_usernames)}, выберите уровень остроты:\n\n"
                 f"🟢 <b>Безопасно:</b> Легкие и веселые задания\n"
                 f"🟡 <b>Остро:</b> Более личные вопросы\n"
                 f"🔴 <b>Рискованно:</b> Самые смелые задания",
@@ -346,7 +351,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 await bot.send_message(
                     current_player_id,
                     f"📝 <b>Создание задания</b>\n\n"
-                    f"Тебе нужно придумать {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}\n\n"
+                    f"Тебе нужно придумать {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names, game.player_usernames)}\n\n"
                     f"✍️ <b>Напиши его прямо здесь, в этом личном сообщении боту.</b>\n\n"
                     f"💡 <i>Пример вопроса:</i> 'Какой твой любимый мем в TikTok?'\n"
                     f"💡 <i>Пример действия:</i> 'Спой куплет песни голосом робота'\n\n"
@@ -356,7 +361,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 # Also notify the target player that they will receive a message
                 await bot.send_message(
                     target_player_id,
-                    f"Ожидайте {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} от игрока {get_player_name_link(current_player_id, game.player_names)} в личных сообщениях."
+                    f"Ожидайте {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} от игрока {get_player_name_link(current_player_id, game.player_names, game.player_usernames)} в личных сообщениях."
                 )
 
                 # Update game state to show who is waiting for response
@@ -454,6 +459,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             # Add player to lobby
             lobby["players"].append(player_id)
             lobby["player_names"][player_id] = player_name
+            lobby["player_usernames"][player_id] = callback.from_user.username
 
             # Update lobby message
             mode = lobby["mode"]
@@ -480,7 +486,6 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             is_creator = player_id == lobby["creator"]
             await callback.message.edit_text(
                 lobby_text,
-                parse_mode='HTML',
                 reply_markup=create_lobby_keyboard(is_creator)
             )
 
@@ -509,7 +514,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 return
 
             # Create game from lobby
-            game = TruthOrDareGame(chat_id, lobby["players"], lobby["mode"], lobby["rules_mode"], lobby["player_names"])
+            game = TruthOrDareGame(chat_id, lobby["players"], lobby["mode"], lobby["rules_mode"], lobby["player_names"], lobby["player_usernames"])
             active_games[chat_id] = game
 
             # Remove lobby
@@ -535,7 +540,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if game.mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
                 f"📜 <b>Правила:</b> {'С правилами ✅' if game.rules_mode == MODE_WITH_RULES else 'Без правил ❌'}\n"
                 f"{rules_description}\n"
-                f"👤 <b>Ход игрока:</b> {get_player_name_link(game.get_current_player(), game.player_names)}\n\n"
+                f"👤 <b>Ход игрока:</b> {get_player_name_link(game.get_current_player(), game.player_names, game.player_usernames)}\n\n"
                 f"🎮 <i>Игра началась! Удачи всем участникам!</i>"
             )
 
@@ -707,9 +712,11 @@ async def join_truth_or_dare(message: Message, bot: Bot):
             return
 
         # Add player to lobby
-        player_name = message.from_user.first_name or message.from_user.username or "Игрок"
+        player_name = message.from_user.first_name or "Игрок"
+        player_username = message.from_user.username
         lobby["players"].append(player_id)
         lobby["player_names"][player_id] = player_name
+        lobby["player_usernames"][player_id] = player_username
 
         # Update lobby message if exists
         if lobby.get("message_id"):
@@ -738,7 +745,6 @@ async def join_truth_or_dare(message: Message, bot: Bot):
                     chat_id=chat_id,
                     message_id=lobby["message_id"],
                     text=lobby_text,
-                    parse_mode='HTML',
                     reply_markup=create_lobby_keyboard(player_id == lobby["creator"])
                 )
             except:
