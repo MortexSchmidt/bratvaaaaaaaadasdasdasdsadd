@@ -260,7 +260,7 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
                 f"🎉 Победа! 🎉\n"
                 f"{winner_name} ({player_mark}) выиграл!\n\n"
                 f"Сыграно ходов: {game['moves']}",
-                reply_markup=create_board(game["board"])
+                reply_markup=None  # Remove the game board
             )
             
             # Clean up game
@@ -275,7 +275,7 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
                 f"🤝 Ничья! 🤝\n"
                 f"{player_x_name} и {player_o_name} сыграли вничью!\n\n"
                 f"Сыграно ходов: {game['moves']}",
-                reply_markup=create_board(game["board"])
+                reply_markup=None  # Remove the game board
             )
             
             # Clean up game
@@ -327,7 +327,7 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
         await callback.message.edit_text(
             f"🏳️ {surrenderer_name} сдался!\n"
             f"{winner_name} выигрывает!",
-            reply_markup=create_board(game["board"])
+            reply_markup=None  # Remove the game board
         )
         
         # Clean up game
