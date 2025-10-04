@@ -359,14 +359,16 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     f"💡 <i>Пример вопроса:</i> 'Какой твой любимый мем в TikTok?'\n"
                     f"💡 <i>Пример действия:</i> 'Спой куплет песни голосом робота'\n\n"
                     f"После отправки задания, оно будет автоматически доставлено игроку!",
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
                 )
 
                 # Also notify the target player that they will receive a message
                 await bot.send_message(
                     target_player_id,
                     f"Ожидайте {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} от игрока {get_player_display_name(current_player_id, game.player_names, game.player_usernames)} в личных сообщениях.",
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
                 )
 
                 # Update game state to show who is waiting for response
@@ -418,7 +420,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             await bot.send_message(
                 target_player_id,
                 f"🎲 Вам пришло случайное задание!\n\n{content_description}: {random_content}",
-                parse_mode='HTML'
+                parse_mode='HTML',
+                disable_web_page_preview=True
             )
 
             # Update game state
@@ -494,11 +497,35 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             # Check if creator is viewing - show start button
             is_creator = player_id == lobby["creator"]
-            await callback.message.edit_text(
-                lobby_text,
-                reply_markup=create_lobby_keyboard(is_creator),
-                parse_mode='HTML'
-            )
+            # Update the main lobby message in the group chat
+            lobby_msg_id = lobbies[chat_id]["message_id"]
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=lobby_msg_id,
+                    text=lobby_text,
+                    reply_markup=create_lobby_keyboard(is_creator),
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
+            except Exception:
+                # If message can't be edited, send a new one to the group
+                await callback.message.answer(lobby_text, reply_markup=create_lobby_keyboard(is_creator), parse_mode='HTML', disable_web_page_preview=True)
+            
+            # Notify all lobby members about the new join (except the joining player)
+            joining_player_id = callback.from_user.id
+            for player_id in lobby["players"]:
+                if player_id != joining_player_id:  # Skip the joining player
+                    try:
+                        await bot.send_message(
+                            player_id,
+                            f"🎉 <b>{player_name} присоединился к лобби!</b>\n"
+                            f"👥 Всего игроков: {len(lobby['players'])}",
+                            parse_mode='HTML',
+                            disable_web_page_preview=True
+                        )
+                    except Exception:
+                        pass  # User might have blocked the bot
 
             # Notify about join
             await callback.message.answer(
@@ -585,7 +612,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             await bot.send_message(
                 target_player_id,
                 f"🎲 Вам пришло случайное задание!\n\n{content_description}: {content}",
-                parse_mode='HTML'
+                parse_mode='HTML',
+                disable_web_page_preview=True
             )
 
             # Update game state
@@ -631,14 +659,16 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     f"💡 <i>Пример вопроса:</i> 'Какое твое самое неловкое свидание?'\n"
                     f"💡 <i>Пример действия:</i> 'Сделай 20 отжиманий или имитацию'\n\n"
                     f"После отправки задания, оно будет автоматически доставлено игроку!",
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
                 )
 
                 # Also notify the target player that they will receive a message
                 await bot.send_message(
                     target_player_id,
                     f"Ожидайте {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} от игрока {get_player_display_name(current_player_id, game.player_names)} в личных сообщениях.",
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
                 )
 
                 # Update game state to show who is waiting for response
@@ -721,7 +751,8 @@ async def join_truth_or_dare(message: Message, bot: Bot):
             f"🎉 <b>{player_name} присоединился к игре!</b>\n"
             f"👥 Всего игроков: {len(game.players)}\n\n"
             f"🎮 Продолжаем веселье!",
-            parse_mode='HTML'
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
     elif chat_id in lobbies:
         lobby = lobbies[chat_id]
@@ -774,7 +805,8 @@ async def join_truth_or_dare(message: Message, bot: Bot):
             f"🎉 <b>{player_name} присоединился к лобби!</b>\n"
             f"👥 Всего игроков: {len(lobby['players'])}\n\n"
             f"🎮 Используйте кнопку 'Играть' в лобби!",
-            parse_mode='HTML'
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
     else:
         await message.answer("В этом чате нет активного лобби или игры 'Правда или действие'!\n\nИспользуйте /truthordare чтобы создать лобби.")
@@ -816,11 +848,12 @@ async def handle_all_messages(message: Message, bot: Bot):
                 f"👤 <b>От:</b> {get_player_display_name(sender_id, game.player_names)}\n\n"
                 f"❓ <b>Задание:</b>\n{message.text}\n\n"
                 f"💬 <i>Ответьте в общем чате после выполнения!</i>",
-                parse_mode='HTML'
+                parse_mode='HTML',
+                disable_web_page_preview=True
             )
 
             # Also send a confirmation to the sender
-            await message.answer(f"✅ <b>Отлично!</b> Ваше задание отправлено игроку {get_player_display_name(target_player_id, game.player_names)}!\n\nОжидаем выполнения... 🎉", parse_mode='HTML')
+            await message.answer(f"✅ <b>Отлично!</b> Ваше задание отправлено игроку {get_player_display_name(target_player_id, game.player_names)}!\n\nОжидаем выполнения... 🎉", parse_mode='HTML', disable_web_page_preview=True)
             
             # Update the game state to show it's waiting for the target to respond
             game_chat_id = info["game_chat_id"]
@@ -844,7 +877,8 @@ async def handle_all_messages(message: Message, bot: Bot):
                     f"📨 <b>{get_player_display_name(target_player_id, game.player_names)} получил задание!</b> 📨\n\n"
                     f"🎯 Следующий ход: {get_player_display_name(game.get_current_player(), game.player_names)}\n\n"
                     f"⏳ <i>Ждем выполнения задания...</i>",
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
                 )
             
             # Remove from waiting list
@@ -895,7 +929,8 @@ async def handle_all_messages(message: Message, bot: Bot):
                         f"✅ <b>Отлично!</b> {get_player_display_name(player_id, game.player_names)} {response_type}! 🎉\n\n"
                         f"🎯 Ход переходит к: {get_player_display_name(next_player_id, game.player_names)}\n\n"
                         f"🔥 <i>Продолжаем игру!</i>",
-                        parse_mode='HTML'
+                        parse_mode='HTML',
+                        disable_web_page_preview=True
                     )
                 else:
                     # This is a general message, not a response to a truth/dare
