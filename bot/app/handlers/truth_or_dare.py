@@ -324,7 +324,12 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 # Send to current player instructions to send via PM
                 await bot.send_message(
                     current_player_id,
-                    f"Введите {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}:"
+                    f"📝 <b>Создание задания</b>\n\n"
+                    f"Тебе нужно придумать {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}\n\n"
+                    f"✍️ <b>Напиши его прямо здесь, в этом личном сообщении боту.</b>\n\n"
+                    f"💡 <i>Пример вопроса:</i> 'Какой твой любимый мем в TikTok?'\n"
+                    f"💡 <i>Пример действия:</i> 'Спой куплет песни голосом робота'\n\n"
+                    f"После отправки задания, оно будет автоматически доставлено игроку!"
                 )
 
                 # Also notify the target player that they will receive a message
@@ -338,8 +343,9 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 game.expected_responder = target_player_id
 
                 await callback.message.edit_text(
-                    f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n"
-                    f"Ожидаем отправки в личные сообщения..."
+                    f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n\n"
+                    f"📩 <b>Важно!</b> {get_player_name_link(current_player_id, game.player_names)}, напиши задание в <b>личные сообщения боту</b>!\n"
+                    f"Не пиши в общем чате - задание должно быть секретным! 🤫"
                 )
 
             else:  # MODE_ANYONE
@@ -471,7 +477,12 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 # Send to current player instructions to send via PM
                 await bot.send_message(
                     current_player_id,
-                    f"Введите {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}:"
+                    f"📝 <b>Создание задания</b>\n\n"
+                    f"Тебе нужно придумать {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}\n\n"
+                    f"✍️ <b>Напиши его прямо здесь, в этом личном сообщении боту.</b>\n\n"
+                    f"💡 <i>Пример вопроса:</i> 'Какое твое самое неловкое свидание?'\n"
+                    f"💡 <i>Пример действия:</i> 'Сделай 20 отжиманий или имитацию'\n\n"
+                    f"После отправки задания, оно будет автоматически доставлено игроку!"
                 )
 
                 # Also notify the target player that they will receive a message
@@ -485,8 +496,9 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 game.expected_responder = target_player_id
 
                 await callback.message.edit_text(
-                    f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice_type == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n"
-                    f"Ожидаем отправки в личные сообщения..."
+                    f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice_type == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n\n"
+                    f"📩 <b>Важно!</b> {get_player_name_link(current_player_id, game.player_names)}, напиши задание в <b>личные сообщения боту</b>!\n"
+                    f"Не пиши в общем чате - задание должно быть секретным! 🤫"
                 )
         
         await callback.answer()
