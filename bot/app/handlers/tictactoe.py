@@ -32,12 +32,13 @@ def create_board(board_state):
                 builder.button(text="❌", callback_data=f"ttt:move:{i}:{j}")
             else:
                 builder.button(text="⭕", callback_data=f"ttt:move:{i}:{j}")
-        builder.adjust(3)
+        # Adjust only after each row of 3 buttons
+    builder.adjust(3, 3, 3)
     
     # Add game controls
     builder.button(text="🔄 Новая игра", callback_data="ttt:new")
     builder.button(text="❌ Сдаться", callback_data="ttt:quit")
-    builder.adjust(3, 2)
+    builder.adjust(3, 3, 3, 2)
     
     return builder.as_markup()
 
