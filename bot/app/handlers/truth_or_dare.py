@@ -4,8 +4,19 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from typing import Dict, List, Optional
+import json
+import random
+import os
 
 router = Router(name="truth_or_dare")
+
+# Load game content
+CONTENT_FILE = os.path.join(os.path.dirname(__file__), '..', 'truth_or_dare_content.json')
+try:
+    with open(CONTENT_FILE, 'r', encoding='utf-8') as f:
+        GAME_CONTENT = json.load(f)
+except FileNotFoundError:
+    GAME_CONTENT = {"truths": {"safe": [], "spicy": [], "risky": []}, "dares": {"safe": [], "spicy": [], "risky": []}}
 
 # Constants for game modes
 MODE_CLOCKWISE = "clockwise"  # По часовой стрелке
@@ -88,12 +99,13 @@ def create_rules_modes_keyboard():
 def create_truth_or_dare_choice_keyboard():
     """Create keyboard for truth or dare choice"""
     builder = InlineKeyboardBuilder()
-    
+
     builder.button(text="💡 Правда", callback_data="tod:choice:truth")
     builder.button(text="🎭 Действие", callback_data="tod:choice:dare")
+    builder.button(text="🎲 Случайное", callback_data="tod:choice:random")
     builder.button(text="⏭️ Пас", callback_data="tod:choice:pass")
-    builder.adjust(1, 1, 1)
-    
+    builder.adjust(2, 2)
+
     return builder.as_markup()
 
 def create_target_player_keyboard(game: TruthOrDareGame, current_player_id: int):
@@ -110,10 +122,44 @@ def create_target_player_keyboard(game: TruthOrDareGame, current_player_id: int)
 
     return builder.as_markup()
 
+def create_difficulty_keyboard():
+    """Create keyboard for selecting difficulty level"""
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="🟢 Безопасно", callback_data="tod:difficulty:safe")
+    builder.button(text="🟡 Остро", callback_data="tod:difficulty:spicy")
+    builder.button(text="🔴 Рискованно", callback_data="tod:difficulty:risky")
+    builder.adjust(1, 1, 1)
+
+    return builder.as_markup()
+
 def get_player_name_link(player_id: int, player_names: Dict[int, str]) -> str:
     """Get a link to the player using Telegram's user linking feature"""
     name = player_names.get(player_id, "Игрок")
     return f'<a href="tg://user?id={player_id}">{name}</a>'
+
+def get_random_content(content_type: str, difficulty: str = None) -> tuple[str, str]:
+    """Get random truth or dare content. Returns (content, actual_type)"""
+    if content_type == "random":
+        content_type = random.choice(["truth", "dare"])
+
+    if content_type not in ["truth", "dare"]:
+        return "Неверный тип контента", content_type
+
+    key = "truths" if content_type == "truth" else "dares"
+
+    if difficulty and difficulty in GAME_CONTENT[key]:
+        options = GAME_CONTENT[key][difficulty]
+    else:
+        # Combine all difficulties if no specific difficulty
+        options = []
+        for diff in GAME_CONTENT[key].values():
+            options.extend(diff)
+
+    if not options:
+        return "Контент не найден", content_type
+
+    return random.choice(options), content_type
 
 @router.message(Command(commands=["truthordare", "tod"]))
 async def start_truth_or_dare(message: Message):
@@ -136,8 +182,12 @@ async def start_truth_or_dare(message: Message):
     
     # Send message asking for game mode selection
     await message.answer(
-        "🎮 Начинаем игру 'Правда или действие'!\n\n"
-        "Выберите режим игры:",
+        "🎉 <b>Добро пожаловать в 'Правда или Действие 2.0'!</b> 🎉\n\n"
+        "🌟 <b>Новые возможности:</b>\n"
+        "• 🎲 Случайные задания с разными уровнями сложности\n"
+        "• 📱 Современные вопросы и действия\n"
+        "• 👥 Отображение реальных имен игроков\n\n"
+        "🎯 <b>Выберите режим игры:</b>",
         reply_markup=create_game_modes_keyboard()
     )
 
@@ -159,7 +209,9 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
         
         # Ask for rules mode
         await callback.message.edit_text(
-            "🎮 Выберите режим правил:",
+            "📜 <b>Выберите режим правил:</b>\n\n"
+            "✅ <b>С правилами:</b> Ограниченные пасы, безопасные задания\n"
+            "❌ <b>Без правил:</b> Неограниченные пасы, любая сложность",
             reply_markup=create_rules_modes_keyboard()
         )
         
@@ -195,12 +247,12 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 )
             
             await callback.message.edit_text(
-                f"🎮 Игра 'Правда или действие' началась!\n"
-                f"Режим: {'по часовой стрелке' if mode == MODE_CLOCKWISE else 'кому угодно'}\n"
-                f"Правила: {'с правилами' if rules_mode == MODE_WITH_RULES else 'без правил'}\n"
-                f"{rules_description}"
-                f"Ход игрока: {get_player_name_link(game.get_current_player(), game.player_names)}\n"
-                f"Приглашаем других игроков присоединиться командой /join_tod"
+                f"🚀 <b>Игра 'Правда или Действие 2.0' началась!</b> 🚀\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {'С правилами ✅' if rules_mode == MODE_WITH_RULES else 'Без правил ❌'}\n"
+                f"{rules_description}\n"
+                f"👤 <b>Ход игрока:</b> {get_player_name_link(game.get_current_player(), game.player_names)}\n\n"
+                f"➕ <i>Другие игроки могут присоединиться командой</i> <code>/join_tod</code>"
             )
             
             await callback.answer()
@@ -246,6 +298,17 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             else:
                 await callback.answer("Вы уже использовали пас в этой игре!", show_alert=True)
         
+        elif choice == "random":
+            # Ask for difficulty level
+            await callback.message.edit_text(
+                f"🎲 <b>Случайное задание!</b>\n\n"
+                f"👤 {get_player_name_link(current_player_id, game.player_names)}, выберите уровень остроты:\n\n"
+                f"🟢 <b>Безопасно:</b> Легкие и веселые задания\n"
+                f"🟡 <b>Остро:</b> Более личные вопросы\n"
+                f"🔴 <b>Рискованно:</b> Самые смелые задания",
+                reply_markup=create_difficulty_keyboard()
+            )
+
         elif choice in ["truth", "dare"]:
             # Store who is creating the truth/dare
             waiting_for_input[current_player_id] = {
@@ -253,11 +316,11 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 "game_chat_id": chat_id,
                 "creator_id": current_player_id
             }
-            
+
             if game.mode == MODE_CLOCKWISE:
                 # In clockwise mode, target is always the next player
                 target_player_id = game.get_next_player_clockwise()
-                
+
                 # Send to current player instructions to send via PM
                 await bot.send_message(
                     current_player_id,
@@ -269,16 +332,16 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     target_player_id,
                     f"Ожидайте {'вопрос для "правды"' if choice == 'truth' else 'действие для выполнения'} от игрока {get_player_name_link(current_player_id, game.player_names)} в личных сообщениях."
                 )
-                
+
                 # Update game state to show who is waiting for response
                 game.waiting_for_response = current_player_id
                 game.expected_responder = target_player_id
-                
+
                 await callback.message.edit_text(
                     f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n"
                     f"Ожидаем отправки в личные сообщения..."
                 )
-                
+
             else:  # MODE_ANYONE
                 # In "anyone" mode, let the player choose the target
                 await callback.message.edit_text(
@@ -287,7 +350,63 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 )
         
         await callback.answer()
-    
+
+    elif action == "difficulty":
+        # Handle difficulty selection for random content
+        difficulty = data_parts[2]
+
+        if chat_id not in active_games:
+            await callback.answer("Игра не найдена!", show_alert=True)
+            return
+
+        game = active_games[chat_id]
+        current_player_id = callback.from_user.id
+
+        # Verify it's the current player's turn
+        if current_player_id != game.get_current_player():
+            await callback.answer("Сейчас не ваш ход!", show_alert=True)
+            return
+
+        # Generate random content
+        random_content, content_type = get_random_content("random", difficulty)
+
+        if game.mode == MODE_CLOCKWISE:
+            # In clockwise mode, target is always the next player
+            target_player_id = game.get_next_player_clockwise()
+
+            # Send the random content directly
+            content_description = "вопрос для 'Правды'" if content_type == "truth" else "действие"
+            await bot.send_message(
+                target_player_id,
+                f"🎲 Вам пришло случайное задание!\n\n{content_description}: {random_content}"
+            )
+
+            # Update game state
+            game.waiting_for_response = current_player_id
+            game.expected_responder = target_player_id
+
+            await callback.message.edit_text(
+                f"🎲 {get_player_name_link(current_player_id, game.player_names)} выбрал случайное задание для {get_player_name_link(target_player_id, game.player_names)}!\n"
+                f"Ожидаем выполнения..."
+            )
+
+        else:  # MODE_ANYONE
+            # Store the random content and ask for target
+            waiting_for_input[current_player_id] = {
+                "type": content_type,
+                "content": random_content,
+                "random": True,
+                "game_chat_id": chat_id,
+                "creator_id": current_player_id
+            }
+
+            await callback.message.edit_text(
+                f"🎯 {get_player_name_link(current_player_id, game.player_names)}, выберите игрока для случайного задания:",
+                reply_markup=create_target_player_keyboard(game, current_player_id)
+            )
+
+        await callback.answer()
+
     elif action == "target":
         # Handle target player selection (for "anyone" mode)
         target_player_id = int(data_parts[2])
@@ -304,45 +423,71 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             await callback.answer("Сейчас не ваш ход!", show_alert=True)
             return
         
-        # Store who is creating the truth/dare and the target
-        if current_player_id in waiting_for_input:
-            waiting_for_input[current_player_id]["target_id"] = target_player_id
-        else:
-            waiting_for_input[current_player_id] = {
-                "type": "pending",  # Will be set when user sends the content
-                "game_chat_id": chat_id,
-                "creator_id": current_player_id,
-                "target_id": target_player_id
-            }
-        
-        choice_type = waiting_for_input[current_player_id].get("type", "pending")
-        if choice_type == "pending":
-            # This is from the target selection, need to ask for truth/dare type again
-            await callback.message.edit_text(
-                f"🎯 {get_player_name_link(current_player_id, game.player_names)}, выберите для игрока {get_player_name_link(target_player_id, game.player_names)}:",
-                reply_markup=create_truth_or_dare_choice_keyboard()
-            )
-        else:
-            # Send to current player instructions to send via PM
-            await bot.send_message(
-                current_player_id,
-                f"Введите {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}:"
-            )
+        # Check if this is random content
+        if current_player_id in waiting_for_input and waiting_for_input[current_player_id].get("random"):
+            # Send the pre-generated random content
+            info = waiting_for_input[current_player_id]
+            content = info["content"]
+            content_type = info["type"]
 
-            # Also notify the target player that they will receive a message
+            content_description = "вопрос для 'Правды'" if content_type == "truth" else "действие"
             await bot.send_message(
                 target_player_id,
-                f"Ожидайте {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} от игрока {get_player_name_link(current_player_id, game.player_names)} в личных сообщениях."
+                f"🎲 Вам пришло случайное задание!\n\n{content_description}: {content}"
             )
-            
-            # Update game state to show who is waiting for response
+
+            # Update game state
             game.waiting_for_response = current_player_id
             game.expected_responder = target_player_id
-            
+
             await callback.message.edit_text(
-                f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice_type == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n"
-                f"Ожидаем отправки в личные сообщения..."
+                f"🎲 {get_player_name_link(current_player_id, game.player_names)} выбрал случайное задание для {get_player_name_link(target_player_id, game.player_names)}!\n"
+                f"Ожидаем выполнения..."
             )
+
+            # Remove from waiting list
+            del waiting_for_input[current_player_id]
+
+        else:
+            # Store who is creating the truth/dare and the target
+            if current_player_id in waiting_for_input:
+                waiting_for_input[current_player_id]["target_id"] = target_player_id
+            else:
+                waiting_for_input[current_player_id] = {
+                    "type": "pending",  # Will be set when user sends the content
+                    "game_chat_id": chat_id,
+                    "creator_id": current_player_id,
+                    "target_id": target_player_id
+                }
+
+            choice_type = waiting_for_input[current_player_id].get("type", "pending")
+            if choice_type == "pending":
+                # This is from the target selection, need to ask for truth/dare type again
+                await callback.message.edit_text(
+                    f"🎯 {get_player_name_link(current_player_id, game.player_names)}, выберите для игрока {get_player_name_link(target_player_id, game.player_names)}:",
+                    reply_markup=create_truth_or_dare_choice_keyboard()
+                )
+            else:
+                # Send to current player instructions to send via PM
+                await bot.send_message(
+                    current_player_id,
+                    f"Введите {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} для игрока {get_player_name_link(target_player_id, game.player_names)}:"
+                )
+
+                # Also notify the target player that they will receive a message
+                await bot.send_message(
+                    target_player_id,
+                    f"Ожидайте {'вопрос для "правды"' if choice_type == 'truth' else 'действие для выполнения'} от игрока {get_player_name_link(current_player_id, game.player_names)} в личных сообщениях."
+                )
+
+                # Update game state to show who is waiting for response
+                game.waiting_for_response = current_player_id
+                game.expected_responder = target_player_id
+
+                await callback.message.edit_text(
+                    f"🎮 {get_player_name_link(current_player_id, game.player_names)} составляет {'вопрос' if choice_type == 'truth' else 'действие'} для {get_player_name_link(target_player_id, game.player_names)}\n"
+                    f"Ожидаем отправки в личные сообщения..."
+                )
         
         await callback.answer()
 
@@ -402,8 +547,9 @@ async def join_truth_or_dare(message: Message):
 
         # Notify all players about the new join
         await message.answer(
-            f"🎮 {get_player_name_link(player_id, game.player_names)} присоединился к игре!\n"
-            f"Всего игроков: {len(game.players)}"
+            f"🎉 <b>{get_player_name_link(player_id, game.player_names)} присоединился к игре!</b>\n"
+            f"👥 Всего игроков: {len(game.players)}\n\n"
+            f"🎮 Продолжаем веселье!"
         )
     else:  # Game still being set up invites
         if player_id in game_invites[chat_id]["players"]:
@@ -415,8 +561,9 @@ async def join_truth_or_dare(message: Message):
         game_invites[chat_id]["player_names"][player_id] = player_name
 
         await message.answer(
-            f"🎮 {get_player_name_link(player_id, game_invites[chat_id]['player_names'])} присоединился к игре!\n"
-            f"Всего игроков: {len(game_invites[chat_id]['players'])}"
+            f"🎉 <b>{get_player_name_link(player_id, game_invites[chat_id]['player_names'])} присоединился к игре!</b>\n"
+            f"👥 Всего игроков: {len(game_invites[chat_id]['players'])}\n\n"
+            f"🎮 Готовимся к старту!"
         )
 
 # Main handler for all messages
@@ -451,11 +598,15 @@ async def handle_all_messages(message: Message, bot: Bot):
             game = active_games[game_chat_id]
             await bot.send_message(
                 target_player_id,
-                f"🎭 Вам пришло задание '{content_type}' от {get_player_name_link(sender_id, game.player_names)}:\n\n{message.text}"
+                f"🎭 <b>Вам пришло задание!</b>\n\n"
+                f"📝 <b>Тип:</b> {content_type}\n"
+                f"👤 <b>От:</b> {get_player_name_link(sender_id, game.player_names)}\n\n"
+                f"❓ <b>Задание:</b>\n{message.text}\n\n"
+                f"💬 <i>Ответьте в общем чате после выполнения!</i>"
             )
 
             # Also send a confirmation to the sender
-            await message.answer(f"✅ Ваше задание было отправлено игроку {get_player_name_link(target_player_id, game.player_names)}!")
+            await message.answer(f"✅ <b>Отлично!</b> Ваше задание отправлено игроку {get_player_name_link(target_player_id, game.player_names)}!\n\nОжидаем выполнения... 🎉")
             
             # Update the game state to show it's waiting for the target to respond
             game_chat_id = info["game_chat_id"]
@@ -476,8 +627,9 @@ async def handle_all_messages(message: Message, bot: Bot):
                 # Update main chat about the new state
                 await bot.send_message(
                     game_chat_id,
-                    f"🎮 {get_player_name_link(target_player_id, game.player_names)} получил задание!\n"
-                    f"Ход теперь передан игроку: {get_player_name_link(game.get_current_player(), game.player_names)}"
+                    f"📨 <b>{get_player_name_link(target_player_id, game.player_names)} получил задание!</b> 📨\n\n"
+                    f"🎯 Следующий ход: {get_player_name_link(game.get_current_player(), game.player_names)}\n\n"
+                    f"⏳ <i>Ждем выполнения задания...</i>"
                 )
             
             # Remove from waiting list
@@ -525,8 +677,9 @@ async def handle_all_messages(message: Message, bot: Bot):
                     # Notify the chat about the response
                     response_type = "ответил на вопрос" if "правду" in message.text.lower() or "вопрос" in message.text.lower() else "выполнил задание"
                     await message.answer(
-                        f"✅ {get_player_name_link(player_id, game.player_names)} {response_type}!\n"
-                        f"Ход передан игроку: {get_player_name_link(next_player_id, game.player_names)}"
+                        f"✅ <b>Отлично!</b> {get_player_name_link(player_id, game.player_names)} {response_type}! 🎉\n\n"
+                        f"🎯 Ход переходит к: {get_player_name_link(next_player_id, game.player_names)}\n\n"
+                        f"🔥 <i>Продолжаем игру!</i>"
                     )
                 else:
                     # This is a general message, not a response to a truth/dare
