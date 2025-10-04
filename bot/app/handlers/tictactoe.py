@@ -23,22 +23,25 @@ def create_board(board_state):
     builder = InlineKeyboardBuilder()
     
     # Add visual styling to the board
-    for i in range(3):
-        for j in range(3):
-            cell_value = board_state[i*3 + j]
+    # Create each row separately to ensure proper layout
+    for i in range(3):  # rows
+        for j in range(3):  # columns
+            position = i * 3 + j
+            cell_value = board_state[position]
             if cell_value == EMPTY_CELL:
                 builder.button(text="⬜", callback_data=f"ttt:move:{i}:{j}")
             elif cell_value == PLAYER_X:
                 builder.button(text="❌", callback_data=f"ttt:move:{i}:{j}")
             else:
                 builder.button(text="⭕", callback_data=f"ttt:move:{i}:{j}")
-        # Adjust only after each row of 3 buttons
-    builder.adjust(3, 3, 3)
     
-    # Add game controls
+    # Set the layout to have 3 buttons per row for the board
+    builder.adjust(3, 3, 3) # 3 rows of 3 buttons each for the board
+    
+    # Add game controls below the board
     builder.button(text="🔄 Новая игра", callback_data="ttt:new")
     builder.button(text="❌ Сдаться", callback_data="ttt:quit")
-    builder.adjust(3, 3, 3, 2)
+    builder.adjust(3, 3, 3, 2)  # Layout: 3 rows of board + 2 control buttons
     
     return builder.as_markup()
 
