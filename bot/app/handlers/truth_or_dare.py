@@ -495,8 +495,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
 
-            # Check if creator is viewing - show start button
-            is_creator = player_id == lobby["creator"]
+            # Check if joining player is the creator - show start button accordingly
+            is_creator = joining_player_id == lobby["creator"]
             # Update the main lobby message in the group chat
             lobby_msg_id = lobbies[chat_id]["message_id"]
             try:
@@ -527,12 +527,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     except Exception:
                         pass  # User might have blocked the bot
 
-            # Notify about join
-            await callback.message.answer(
-                f"🎉 <b>{player_name} присоединился к лобби!</b>"
-            )
-
-            await callback.answer()
+            await callback.answer("Вы успешно присоединились к лобби!", show_alert=False)
 
         elif sub_action == "start":
             # Start game from lobby
