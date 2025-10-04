@@ -11,6 +11,7 @@ from app.handlers import mafia
 from app.handlers import drочка  # Added drочка handler
 from app.handlers import rp  # Added RP handler
 from app.handlers import ai  # Added AI handler
+from app.handlers import tictactoe  # Added Tic Tac Toe handler
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -45,6 +46,7 @@ async def main():
     dp.include_router(drочка.router)  # Register drочка router
     dp.include_router(rp.router)  # Register RP router
     dp.include_router(ai.router)  # Register AI router
+    dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -63,7 +65,7 @@ async def main():
             ("help", "Справка"),
             ("ping", "Проверка"),
             ("echo", "Эхо текст"),
-            ("fun", "Случайная фраза"),
+            ("fun", "Случайная фаза"),
             ("groupinfo", "Инфо о группе"),
             ("whoami", "Ваш ID"),
             ("id", "То же что /whoami"),
@@ -77,6 +79,7 @@ async def main():
             ("check_mafia", "Проверить ночью"),
             ("drochka", "Поработать рукой"),  # Changed to Latin characters
             ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
+            ("tictactoe", "Играть в крестики-нолики"),  # Added Tic Tac Toe command
         ]
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
