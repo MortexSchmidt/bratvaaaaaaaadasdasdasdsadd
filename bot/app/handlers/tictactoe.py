@@ -8,8 +8,7 @@ from app.config import load_config
 router = Router(name="tictactoe")
 
 # Game state storage (in a real application, you would use a database)
-active_games = {}  # Stores active games
-open_games = []    # Stores game IDs of open games waiting for players
+active_games = {}  # Stores active games by chat_id
 game_invites = {}  # Stores game invite info
 
 def create_board(board_state):
@@ -32,10 +31,10 @@ def create_board(board_state):
     
     return builder.as_markup()
 
-def create_join_button(game_id):
+def create_join_button(chat_id):
     """Create a join game button"""
     builder = InlineKeyboardBuilder()
-    builder.button(text=" Играть в крестики-нолики", callback_data=f"ttt:join:{game_id}")
+    builder.button(text=" Играть в крестики-нолики", callback_data=f"ttt:join:{chat_id}")
     return builder.as_markup()
 
 def check_winner(board):
@@ -68,78 +67,73 @@ def init_board():
 
 @router.message(Command(commands=["tictactoe"]))
 async def start_tictactoe(message: Message):
-    """Create a new Tic Tac Toe game and wait for opponent"""
+    """Create a new Tic Tac Toe game in chat"""
+    chat_id = message.chat.id
     player_id = message.from_user.id
     
-    # Check if player is already in a game
-    for game_id, game in active_games.items():
-        if player_id in [game["player_x"], game["player_o"]]:
-            await message.answer("Вы уже в игре!")
-            return
+    # Check if there's already a game in this chat
+    if chat_id in active_games:
+        await message.answer("В этом чате уже идет игра! Дождитесь её окончания.")
+        return
     
     # Create a new game
-    import random
-    game_id = f"{random.randint(10000, 99999)}"
-    
-    active_games[game_id] = {
+    active_games[chat_id] = {
         "board": init_board(),
         "player_x": player_id,
         "player_o": None,
         "current_player": player_id,
-        "moves": 0
+        "moves": 0,
+        "chat_id": chat_id
     }
-    
-    open_games.append(game_id)
     
     # Send message with join button
     await message.answer(
-        "Крестики-нолики: ожидание второго игрока...",
-        reply_markup=create_join_button(game_id)
+        f"<a href='tg://user?id={player_id}'>Игрок</a> начал игру в крестики-нолики!\n"
+        "Кто хочет сыграть против него?\n\n"
+        "❌ - Создатель игры\n"
+        "⭕ - Свободно",
+        reply_markup=create_join_button(chat_id)
     )
 
 @router.callback_query(lambda c: c.data and c.data.startswith("ttt:"))
 async def handle_tictactoe_callback(callback: CallbackQuery):
     """Handle all Tic Tac Toe callbacks"""
     player_id = callback.from_user.id
+    chat_id = callback.message.chat.id
     data_parts = callback.data.split(":")
     action = data_parts[1]
     
     if action == "join":
         # Handle joining a game
-        game_id = data_parts[2]
+        game_chat_id = int(data_parts[2])
         
-        # Check if game still exists and is open
-        if game_id not in active_games:
+        # Check if game still exists
+        if game_chat_id not in active_games:
             await callback.answer("Игра больше не существует!", show_alert=True)
             return
             
-        if game_id not in open_games:
-            await callback.answer("Лобби заполнено!", show_alert=True)
-            return
-            
-        game = active_games[game_id]
+        game = active_games[game_chat_id]
         
         # Check if player is already in this game
         if player_id in [game["player_x"], game["player_o"]]:
             await callback.answer("Вы уже в этой игре!", show_alert=True)
             return
+            
+        # Check if second player is already set
+        if game["player_o"] is not None:
+            await callback.answer("К игре уже присоединился другой игрок!", show_alert=True)
+            return
         
         # Add player as O
         game["player_o"] = player_id
-        open_games.remove(game_id)  # Close the lobby
         
         # Notify players
-        # Player X (creator)
-        await callback.bot.send_message(
-            game["player_x"],
-            "Игрок присоединился! Вы играете за ❌\nВаш ход",
-            reply_markup=create_board(game["board"])
-        )
+        player_x_id = game["player_x"]
         
-        # Player O (joiner)
-        await callback.bot.send_message(
-            player_id,
-            "Вы присоединились к игре! Вы играете за ⭕\nХод соперника...",
+        await callback.message.edit_text(
+            f"<a href='tg://user?id={player_x_id}'>Игрок X</a> против "
+            f"<a href='tg://user?id={player_id}'>Игрока O</a>\n\n"
+            "Игра началась! Ходит ❌",
             reply_markup=create_board(game["board"])
         )
         
@@ -151,23 +145,20 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
             await callback.answer("Неверный формат хода!", show_alert=True)
             return
             
-        row, col = int(data_parts[2]), int(data_parts[3])
-        position = row * 3 + col
-        
-        # Find game player is in
-        game_id = None
-        player_symbol = None
-        for gid, game in active_games.items():
-            if player_id in [game["player_x"], game["player_o"]]:
-                game_id = gid
-                player_symbol = 1 if player_id == game["player_x"] else 2
-                break
-                
-        if not game_id:
-            await callback.answer("Вы не в игре!", show_alert=True)
+        # Check if there's a game in this chat
+        if chat_id not in active_games:
+            await callback.answer("В этом чате нет активной игры!", show_alert=True)
             return
             
-        game = active_games[game_id]
+        game = active_games[chat_id]
+        
+        # Check if player is in this game
+        if player_id not in [game["player_x"], game["player_o"]]:
+            await callback.answer("Вы не участвуете в этой игре!", show_alert=True)
+            return
+            
+        row, col = int(data_parts[2]), int(data_parts[3])
+        position = row * 3 + col
         
         # Check if it's player's turn
         if game["current_player"] != player_id:
@@ -179,6 +170,9 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
             await callback.answer("Эта клетка уже занята!", show_alert=True)
             return
             
+        # Determine player symbol
+        player_symbol = 1 if player_id == game["player_x"] else 2
+        
         # Make move
         game["board"][position] = player_symbol
         game["moves"] += 1
@@ -186,61 +180,47 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
         # Check for winner
         winner = check_winner(game["board"])
         
-        # Determine opponent
-        opponent_id = game["player_o"] if player_id == game["player_x"] else game["player_x"]
-        opponent_symbol = 2 if player_symbol == 1 else 1
-        
         if winner == player_symbol:  # Current player won
-            # Notify winner
-            await callback.message.edit_text(
-                "🎉 Вы выиграли! 🎉", 
-                reply_markup=create_board(game["board"])
-            )
+            player_mark = "❌" if player_symbol == 1 else "⭕"
+            winner_name = "Игрок X" if player_symbol == 1 else "Игрок O"
+            winner_id = game["player_x"] if player_symbol == 1 else game["player_o"]
             
-            # Notify opponent
-            await callback.bot.send_message(
-                opponent_id,
-                "💀 Вы проиграли! 💀",
+            # Notify about win
+            await callback.message.edit_text(
+                f"<a href='tg://user?id={winner_id}'>{winner_name}</a> ({player_mark}) победил! 🎉",
                 reply_markup=create_board(game["board"])
             )
             
             # Clean up game
-            del active_games[game_id]
+            del active_games[chat_id]
             
         elif winner == 3:  # Tie
-            # Notify both players
-            await callback.message.edit_text(
-                "Ничья! 🤝", 
-                reply_markup=create_board(game["board"])
-            )
+            player_x_id = game["player_x"]
+            player_o_id = game["player_o"]
             
-            await callback.bot.send_message(
-                opponent_id,
-                "Ничья! 🤝",
+            # Notify about tie
+            await callback.message.edit_text(
+                f"<a href='tg://user?id={player_x_id}'>Игрок X</a> и "
+                f"<a href='tg://user?id={player_o_id}'>Игрок O</a> сыграли вничью! 🤝",
                 reply_markup=create_board(game["board"])
             )
             
             # Clean up game
-            del active_games[game_id]
+            del active_games[chat_id]
             
         else:
             # Switch player
-            game["current_player"] = opponent_id
+            game["current_player"] = game["player_o"] if player_id == game["player_x"] else game["player_x"]
             
-            # Update boards for both players
+            # Update board for players
             player_mark = "❌" if player_symbol == 1 else "⭕"
-            opponent_mark = "⭕" if player_symbol == 1 else "❌"
+            next_mark = "⭕" if player_symbol == 1 else "❌"
+            next_player_name = "Игрок O" if player_symbol == 1 else "Игрок X"
+            next_player_id = game["player_o"] if player_symbol == 1 else game["player_x"]
             
-            # Notify current player
             await callback.message.edit_text(
-                f"Вы сходили {player_mark}\nХод соперника...",
-                reply_markup=create_board(game["board"])
-            )
-            
-            # Notify opponent
-            await callback.bot.send_message(
-                opponent_id,
-                f"Соперник сходил {player_mark}\nВаш ход {opponent_mark}",
+                f"<a href='tg://user?id={player_id}'>Игрок</a> сходил {player_mark}\n"
+                f"Ходит <a href='tg://user?id={next_player_id}'>{next_player_name}</a> ({next_mark})",
                 reply_markup=create_board(game["board"])
             )
             
