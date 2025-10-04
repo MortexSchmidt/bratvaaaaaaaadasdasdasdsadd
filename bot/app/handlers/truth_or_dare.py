@@ -10,8 +10,8 @@ router = Router(name="truth_or_dare")
 # Constants for game modes
 MODE_CLOCKWISE = "clockwise"  # По часовой стрелке
 MODE_ANYONE = "anyone"       # Кому угодно
-MODE_WITH_RULES = "with_rules"  # С правилами
-MODE_WITHOUT_RULES = "without_rules"  # Без правил
+MODE_WITH_RULES = "with"  # С правилами
+MODE_WITHOUT_RULES = "without"  # Без правил
 
 # Rule constants
 MAX_PASSES_WITH_RULES = 1 # Максимум пасов с правилами
