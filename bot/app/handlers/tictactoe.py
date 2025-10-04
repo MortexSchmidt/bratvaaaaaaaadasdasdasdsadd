@@ -50,20 +50,22 @@ def get_player_symbol(player_id, game):
     return None
 
 async def get_user_name_by_id(bot, user_id):
-    """Get the user's display name by their ID"""
+    """Get the user's display name by their ID with link"""
     try:
         user = await bot.get_chat_member(chat_id=user_id, user_id=user_id)
         user_info = user.user
         if user_info.first_name and user_info.last_name:
-            return f"{user_info.first_name} {user_info.last_name}"
+            display_name = f"{user_info.first_name} {user_info.last_name}"
         elif user_info.first_name:
-            return user_info.first_name
+            display_name = user_info.first_name
         elif user_info.username:
-            return user_info.username
+            display_name = user_info.username
         else:
-            return f"Пользователь {user_info.id}"
+            display_name = f"Пользователь {user_info.id}"
+        
+        return f'<a href="tg://user?id={user_info.id}">{display_name}</a>'
     except:
-        return f"Пользователь {user_id}"
+        return f'<a href="tg://user?id={user_id}">Пользователь {user_id}</a>'
 
 def get_player_link(player_id):
     """Get a link to the player using Telegram's user linking feature"""
