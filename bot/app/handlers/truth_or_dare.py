@@ -269,7 +269,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             )
 
             for player_id in players:
-                name = player_names.get(player_id, "Игрок")
+                name = get_player_name_link(player_id, player_names, player_usernames)
                 lobby_text += f"• {name}\n"
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
@@ -477,7 +477,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             )
 
             for pid in players:
-                name = player_names.get(pid, "Игрок")
+                name = get_player_name_link(pid, player_names, player_usernames)
                 lobby_text += f"• {name}\n"
 
             lobby_text += "\n🎮 <b>Нажмите 'Играть' чтобы присоединиться!</b>"
