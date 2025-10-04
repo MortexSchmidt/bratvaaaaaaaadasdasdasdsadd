@@ -12,6 +12,7 @@ from app.handlers import drочка  # Added drочка handler
 from app.handlers import rp  # Added RP handler
 from app.handlers import ai  # Added AI handler
 from app.handlers import tictactoe  # Added Tic Tac Toe handler
+from app.handlers import truth_or_dare  # Added Truth or Dare handler
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -47,6 +48,7 @@ async def main():
     dp.include_router(rp.router)  # Register RP router
     dp.include_router(ai.router)  # Register AI router
     dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
+    dp.include_router(truth_or_dare.router)  # Register Truth or Dare router
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -80,6 +82,10 @@ async def main():
             ("drochka", "Поработать рукой"),  # Changed to Latin characters
             ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
             ("tictactoe", "Играть в крестики-нолики"),  # Added Tic Tac Toe command
+            ("truthordare", "Играть в правду или действие"),  # Added Truth or Dare command
+            ("tod", "Играть в правду или действие"),  # Added Truth or Dare command (short version)
+            ("end_tod", "Завершить игру в правду или действие"),  # Added end Truth or Dare command
+            ("stop_tod", "Завершить игру в правду или действие"),  # Added stop Truth or Dare command
         ]
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
