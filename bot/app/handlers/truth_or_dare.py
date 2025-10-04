@@ -528,6 +528,32 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     except Exception:
                         pass  # User might have blocked the bot
 
+            # Update lobby message for the joining player separately to show correct buttons
+            try:
+                await callback.message.edit_text(
+                    lobby_text,
+                    reply_markup=create_lobby_keyboard(joining_player_id == lobby["creator"]),
+                    parse_mode='HTML',
+                    disable_web_page_preview=True
+                )
+            except Exception:
+                pass  # Message might be too old to edit
+
+            # Update main lobby message to ensure creator sees the start button
+            lobby_msg_id = lobbies[chat_id]["message_id"]
+            if lobby_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=lobby_msg_id,
+                        text=lobby_text,
+                        reply_markup=create_lobby_keyboard(lobby["creator"] == lobby["creator"]),  # Creator always sees start button
+                        parse_mode='HTML',
+                        disable_web_page_preview=True
+                    )
+                except Exception:
+                    pass  # Message might be too old to edit
+
             await callback.answer("Вы успешно присоединились к лобби!", show_alert=False)
 
         elif sub_action == "start":
