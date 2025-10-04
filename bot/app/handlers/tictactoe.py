@@ -1,5 +1,5 @@
 from __future__ import annotations
-from aiogram import Router
+from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
@@ -15,10 +15,7 @@ TIE = 3
 # Game state storage (in a real application, you would use a database)
 active_games = {}  # Stores active games by chat_id
 
-router = Router(name="tictactoe")
-
 # Game state storage (in a real application, you would use a database)
-active_games = {}  # Stores active games by chat_id
 game_invites = {}  # Stores game invite info
 
 def create_board(board_state):
@@ -52,9 +49,33 @@ def get_player_symbol(player_id, game):
         return PLAYER_O
     return None
 
-def get_player_name(player_symbol):
+async def get_user_name_by_id(bot, user_id):
+    """Get the user's name by their ID"""
+    try:
+        user = await bot.get_chat_member(chat_id=user_id, user_id=user_id)
+        user_info = user.user
+        if user_info.username:
+            return f"@{user_info.username}"
+        elif user_info.first_name and user_info.last_name:
+            return f"{user_info.first_name} {user_info.last_name}"
+        elif user_info.first_name:
+            return user_info.first_name
+        else:
+            return f"Пользователь {user_info.id}"
+    except:
+        return f"Пользователь {user_id}"
+
+def get_player_link(player_id):
+    """Get a link to the player using Telegram's user linking feature"""
+    return f'<a href="tg://user?id={player_id}">Пользователь</a>'
+
+def get_player_name(player_symbol, game, player_x_id=None, player_o_id=None):
     """Get the display name for a player symbol"""
-    if player_symbol == PLAYER_X:
+    if player_symbol == PLAYER_X and player_x_id:
+        return f'<a href="tg://user?id={player_x_id}">Игрок X</a>'
+    elif player_symbol == PLAYER_O and player_o_id:
+        return f'<a href="tg://user?id={player_o_id}">Игрок O</a>'
+    elif player_symbol == PLAYER_X:
         return "Игрок X"
     elif player_symbol == PLAYER_O:
         return "Игрок O"
@@ -103,7 +124,7 @@ def init_board():
     return [EMPTY_CELL] * 9  # 0 = empty, 1 = X, 2 = O
 
 @router.message(Command(commands=["tictactoe"]))
-async def start_tictactoe(message: Message):
+async def start_tictactoe(message: Message, bot: Bot):
     """Create a new Tic Tac Toe game in chat"""
     chat_id = message.chat.id
     player_id = message.from_user.id
@@ -123,9 +144,11 @@ async def start_tictactoe(message: Message):
         "chat_id": chat_id
     }
     
+    player_name = await get_user_name_by_id(message.bot, player_id)
+    
     # Send message with join button
     await message.answer(
-        f"🎮 <a href='tg://user?id={player_id}'>Игрок</a> начал игру в крестики-нолики!\n"
+        f"🎮 {player_name} начал игру в крестики-нолики!\n"
         "Кто хочет сыграть против него?\n\n"
         "❌ - Создатель игры (X)\n"
         "⭕ - Свободно (O)\n\n"
@@ -134,7 +157,7 @@ async def start_tictactoe(message: Message):
     )
 
 @router.callback_query(lambda c: c.data and c.data.startswith("ttt:"))
-async def handle_tictactoe_callback(callback: CallbackQuery):
+async def handle_tictactoe_callback(callback: CallbackQuery, bot):
     """Handle all Tic Tac Toe callbacks"""
     player_id = callback.from_user.id
     chat_id = callback.message.chat.id
@@ -168,9 +191,11 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
         # Notify players
         player_x_id = game["player_x"]
         
+        player_x_name = await get_user_name_by_id(bot, game["player_x"])
+        player_o_name = await get_user_name_by_id(bot, game["player_o"])
+        
         await callback.message.edit_text(
-            f"🎮 <a href='tg://user?id={player_x_id}'>Игрок X</a> против "
-            f"<a href='tg://user?id={player_id}'>Игрока O</a>\n\n"
+            f"🎮 {player_x_name} против {player_o_name}\n\n"
             "Игра началась! Ходит ❌\n\n"
             "Для сдачи нажмите кнопку 'Сдаться' под полем.",
             reply_markup=create_board(game["board"])
@@ -221,13 +246,13 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
         
         if winner == player_symbol:  # Current player won
             player_mark = get_player_mark(player_symbol)
-            winner_name = get_player_name(player_symbol)
             winner_id = game["player_x"] if player_symbol == PLAYER_X else game["player_o"]
+            winner_name = await get_user_name_by_id(bot, winner_id)
             
             # Notify about win
             await callback.message.edit_text(
                 f"🎉 Победа! 🎉\n"
-                f"<a href='tg://user?id={winner_id}'>{winner_name}</a> ({player_mark}) выиграл!\n\n"
+                f"{winner_name} ({player_mark}) выиграл!\n\n"
                 f"Сыграно ходов: {game['moves']}",
                 reply_markup=create_board(game["board"])
             )
@@ -236,14 +261,13 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
             del active_games[chat_id]
             
         elif winner == TIE:  # Tie
-            player_x_id = game["player_x"]
-            player_o_id = game["player_o"]
+            player_x_name = await get_user_name_by_id(bot, game["player_x"])
+            player_o_name = await get_user_name_by_id(bot, game["player_o"])
             
             # Notify about tie
             await callback.message.edit_text(
                 f"🤝 Ничья! 🤝\n"
-                f"<a href='tg://user?id={player_x_id}'>Игрок X</a> и "
-                f"<a href='tg://user?id={player_o_id}'>Игрок O</a> сыграли вничью!\n\n"
+                f"{player_x_name} и {player_o_name} сыграли вничью!\n\n"
                 f"Сыграно ходов: {game['moves']}",
                 reply_markup=create_board(game["board"])
             )
@@ -256,15 +280,16 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
             game["current_player"] = game["player_o"] if player_id == game["player_x"] else game["player_x"]
             
             # Update board for players
+            current_player_name = await get_user_name_by_id(bot, player_id)
+            next_player_id = game["player_o"] if player_id == game["player_x"] else game["player_x"]
+            next_player_name = await get_user_name_by_id(bot, next_player_id)
             player_mark = get_player_mark(player_symbol)
             next_mark = get_player_mark(PLAYER_O if player_symbol == PLAYER_X else PLAYER_X)
-            next_player_name = get_player_name(PLAYER_O if player_symbol == PLAYER_X else PLAYER_X)
-            next_player_id = game["player_o"] if player_symbol == PLAYER_X else game["player_x"]
             
             await callback.message.edit_text(
                 f"🎮 Ход #{game['moves'] + 1}\n"
-                f"<a href='tg://user?id={player_id}'>Игрок</a> сходил {player_mark}\n"
-                f"Ходит <a href='tg://user?id={next_player_id}'>{next_player_name}</a> ({next_mark})",
+                f"{current_player_name} сходил {player_mark}\n"
+                f"Ходит {next_player_name} ({next_mark})",
                 reply_markup=create_board(game["board"])
             )
             
@@ -288,21 +313,14 @@ async def handle_tictactoe_callback(callback: CallbackQuery):
             return
             
         # Determine who is surrendering and who wins
-        if player_id == game["player_x"]:
-            surrenderer = get_player_name(PLAYER_X)
-            winner_name = get_player_name(PLAYER_O)
-            winner_id = game["player_o"]
-            winner_symbol = PLAYER_O
-        else:
-            surrenderer = get_player_name(PLAYER_O)
-            winner_name = get_player_name(PLAYER_X)
-            winner_id = game["player_x"]
-            winner_symbol = PLAYER_X
+        surrenderer_name = await get_user_name_by_id(bot, player_id)
+        winner_id = game["player_o"] if player_id == game["player_x"] else game["player_x"]
+        winner_name = await get_user_name_by_id(bot, winner_id)
             
         # Notify about surrender
         await callback.message.edit_text(
-            f"🏳️ {surrenderer} сдался!\n"
-            f"<a href='tg://user?id={winner_id}'>{winner_name}</a> выигрывает!",
+            f"🏳️ {surrenderer_name} сдался!\n"
+            f"{winner_name} выигрывает!",
             reply_markup=create_board(game["board"])
         )
         
