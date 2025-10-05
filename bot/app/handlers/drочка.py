@@ -11,6 +11,7 @@ except ImportError:  # python <3.9 fallback if ever
     from backports.zoneinfo import ZoneInfo  # type: ignore
 import asyncio
 from typing import Dict
+import math
 from .. import format_user_mention
 
 router = Router(name="drочка")
@@ -71,7 +72,11 @@ def init_db():
             ttt_losses INTEGER DEFAULT 0,
             daily_streak INTEGER DEFAULT 0,
             last_daily TEXT,
-            profile_status TEXT
+            profile_status TEXT,
+            last_broken_streak INTEGER DEFAULT 0,
+            recovery_available INTEGER DEFAULT 0,
+            recovery_stored INTEGER DEFAULT 0,
+            recovery_expires TEXT
         )
     ''')
     # Миграция: если старый столбец pet_name отсутствует — добавить
@@ -90,7 +95,11 @@ def init_db():
         'ttt_losses': "ALTER TABLE user_stats ADD COLUMN ttt_losses INTEGER DEFAULT 0",
         'daily_streak': "ALTER TABLE user_stats ADD COLUMN daily_streak INTEGER DEFAULT 0",
         'last_daily': "ALTER TABLE user_stats ADD COLUMN last_daily TEXT",
-        'profile_status': "ALTER TABLE user_stats ADD COLUMN profile_status TEXT"
+        'profile_status': "ALTER TABLE user_stats ADD COLUMN profile_status TEXT",
+        'last_broken_streak': "ALTER TABLE user_stats ADD COLUMN last_broken_streak INTEGER DEFAULT 0",
+        'recovery_available': "ALTER TABLE user_stats ADD COLUMN recovery_available INTEGER DEFAULT 0",
+        'recovery_stored': "ALTER TABLE user_stats ADD COLUMN recovery_stored INTEGER DEFAULT 0",
+        'recovery_expires': "ALTER TABLE user_stats ADD COLUMN recovery_expires TEXT"
     }
     for col, stmt in add_cols.items():
         if col not in cols:
@@ -104,6 +113,32 @@ def init_db():
             PRIMARY KEY (user_id, code)
         )
     ''')
+    # Daily quests table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS daily_quests (
+            user_id TEXT,
+            date TEXT,
+            code TEXT,
+            progress INTEGER DEFAULT 0,
+            target INTEGER DEFAULT 1,
+            done INTEGER DEFAULT 0,
+            PRIMARY KEY (user_id, date, code)
+        )
+    ''')
+    # Weekly community progress (one row per ISO week)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS weekly_progress (
+            week_key TEXT PRIMARY KEY,
+            total_actions INTEGER DEFAULT 0
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS weekly_participants (
+            week_key TEXT,
+            user_id TEXT,
+            PRIMARY KEY (week_key, user_id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -112,14 +147,14 @@ def load_data() -> Dict:
     init_db()  # Ensure DB is initialized
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, username, last_drочка, total_drочка, current_streak, max_streak, COALESCE(pet_name, ""), break_notified, xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status FROM user_stats')
+    cursor.execute('SELECT user_id, username, last_drочка, total_drочка, current_streak, max_streak, COALESCE(pet_name, ""), break_notified, xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status, last_broken_streak, recovery_available, recovery_stored, recovery_expires FROM user_stats')
     rows = cursor.fetchall()
     conn.close()
     
     data = {}
     for row in rows:
         (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
-         xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status) = row
+         xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status, last_broken_streak, recovery_available, recovery_stored, recovery_expires) = row
         data[user_id] = {
             "username": username,
             "last_drочка": last_drочка,
@@ -135,24 +170,31 @@ def load_data() -> Dict:
             "ttt_losses": ttt_losses or 0,
             "daily_streak": daily_streak or 0,
             "last_daily": last_daily,
-            "profile_status": profile_status or ''
+            "profile_status": profile_status or '',
+            "last_broken_streak": last_broken_streak or 0,
+            "recovery_available": recovery_available or 0,
+            "recovery_stored": recovery_stored or 0,
+            "recovery_expires": recovery_expires
         }
     return data
 
 def save_user_data(user_id: str, username: str, last_drочка: str, total_drочка: int, current_streak: int, max_streak: int, pet_name: str | None, break_notified: int = 0,
                    xp: int = 0, coins: int = 0, elo_ttt: int = 1000, ttt_wins: int = 0, ttt_losses: int = 0, daily_streak: int = 0,
-                   last_daily: str | None = None, profile_status: str | None = None):
+                   last_daily: str | None = None, profile_status: str | None = None,
+                   last_broken_streak: int = 0, recovery_available: int = 0, recovery_stored: int = 0, recovery_expires: str | None = None):
     """Save user data to database"""
     init_db()  # Ensure DB is initialized
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO user_stats 
-        (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
-         xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
+                 xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status,
+                 last_broken_streak, recovery_available, recovery_stored, recovery_expires)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
-          xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status))
+                    xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status,
+                    last_broken_streak, recovery_available, recovery_stored, recovery_expires))
     conn.commit()
     conn.close()
 
@@ -174,7 +216,11 @@ def get_or_init_user(user_id: str, username: str) -> dict:
             "ttt_losses": 0,
             "daily_streak": 0,
             "last_daily": None,
-            "profile_status": ''
+            "profile_status": '',
+            "last_broken_streak": 0,
+            "recovery_available": 0,
+            "recovery_stored": 0,
+            "recovery_expires": None
         }
     return data[user_id]
 
@@ -195,7 +241,11 @@ def persist_user(user_id: str, ud: dict):
         ud.get('ttt_losses',0),
         ud.get('daily_streak',0),
         ud.get('last_daily'),
-        ud.get('profile_status')
+        ud.get('profile_status'),
+        ud.get('last_broken_streak',0),
+        ud.get('recovery_available',0),
+        ud.get('recovery_stored',0),
+        ud.get('recovery_expires')
     )
 
 def add_xp(ud: dict, amount: int):
@@ -230,8 +280,62 @@ def award_achievement(user_id: str, code: str):
 ACHIEVEMENTS = {
     'streak_5': '🔥 Серия 5! Ты начинаешь привыкать…',
     'streak_10': '⚡ Серия 10! Ты официально упорный.',
-    'streak_30': '🏆 Серия 30! Легенда без пропусков.'
+    'streak_30': '🏆 Серия 30! Легенда без пропусков.',
+    'streak_50': '💪 Серия 50! Полсотни выдержал.',
+    'streak_100': '🛡️ Серия 100! Железная дисциплина.',
+    'streak_365': '🌍 Серия 365! Целый год без пропусков.',
+    'total_1000': '🚀 1000 общих действий! Космос.',
+    'total_5000': '🌌 5000 тотал! Ты машина.'
 }
+
+WEEKLY_GOAL = 200  # целевое количество действий на неделю
+
+def current_week_key() -> str:
+    dt = now_tz()
+    iso = dt.isocalendar()
+    return f"{iso.year}-W{iso.week:02d}"
+
+def update_weekly_progress(user_id: str):
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    week = current_week_key()
+    cur.execute('INSERT OR IGNORE INTO weekly_progress(week_key,total_actions) VALUES (?,0)', (week,))
+    cur.execute('UPDATE weekly_progress SET total_actions = total_actions + 1 WHERE week_key=?', (week,))
+    cur.execute('INSERT OR IGNORE INTO weekly_participants(week_key,user_id) VALUES (?,?)', (week, user_id))
+    conn.commit()
+    conn.close()
+
+def ensure_daily_quest(user_id: str):
+    today = today_key()
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?', (user_id, today, 'daily_drochka'))
+    row = cur.fetchone()
+    if row is None:
+        cur.execute('INSERT INTO daily_quests(user_id,date,code,progress,target,done) VALUES (?,?,?,?,?,?)', (user_id, today, 'daily_drochka', 0, 1, 0))
+        conn.commit()
+    conn.close()
+
+def complete_daily_quest_if_applicable(user_id: str, ud: dict):
+    today = today_key()
+    init_db()
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?', (user_id, today, 'daily_drochka'))
+    row = cur.fetchone()
+    if row and row[0] == 0:
+        # complete quest
+        cur.execute('UPDATE daily_quests SET done=1, progress=1 WHERE user_id=? AND date=? AND code=?', (user_id, today, 'daily_drochka'))
+        conn.commit()
+        conn.close()
+        # reward
+        add_xp(ud, 2)
+        add_coins(ud, 1)
+        return True
+    conn.close()
+    return False
 
 async def perform_drочка(message: Message):
     """Perform the drочка action (timezone-aware Europe/Kyiv by default)."""
@@ -253,6 +357,11 @@ async def perform_drочка(message: Message):
         if last_time:
             delta_hours = (now - last_time).total_seconds() / 3600
             if delta_hours > GRACE_HOURS:
+                # streak broken; enable recovery quest
+                user_data['last_broken_streak'] = user_data.get('current_streak',0)
+                user_data['recovery_stored'] = user_data['last_broken_streak']
+                user_data['recovery_available'] = 1 if user_data['last_broken_streak'] >= 10 else 0
+                user_data['recovery_expires'] = (now + timedelta(days=2)).isoformat()
                 user_data['current_streak'] = 0
         user_data["username"] = username
         user_data["last_drочка"] = now.isoformat()
@@ -261,10 +370,17 @@ async def perform_drочка(message: Message):
         user_data['break_notified'] = 0
         if user_data["current_streak"] > user_data["max_streak"]:
             user_data["max_streak"] = user_data["current_streak"]
-        # Reward xp/coins basic logic
+        # Daily quest ensure & completion
+        ensure_daily_quest(user_id)
+        quest_completed = complete_daily_quest_if_applicable(user_id, user_data)
+        # Reward xp basic logic
         add_xp(user_data, 3 if user_data['current_streak'] % 10 == 0 else 1)
+        # Combo coin multiplier on multiples of 7
         if user_data['current_streak'] % 7 == 0:
-            add_coins(user_data, 1)  # combo coin каждые 7 подряд
+            mult = max(1, user_data['current_streak']//7)
+            add_coins(user_data, mult)  # 7->1,14->2,21->3...
+        # update weekly community progress
+        update_weekly_progress(user_id)
         persist_user(user_id, user_data)
         user_mention = format_user_mention(message.from_user)
         flame = "🔥" * min(user_data['current_streak'], 5)
@@ -275,14 +391,27 @@ async def perform_drочка(message: Message):
             f"Всего дрочков: {user_data['total_drочка']}\n"
             f"Текущая серия: {user_data['current_streak']} (макс: {user_data['max_streak']})"
         )
+        if quest_completed:
+            response += "\n🎯 Daily квест выполнен (+2 XP, +1 монета)"
         streak = user_data['current_streak']
-        if streak in (5,10,30):
-            code = f"streak_{streak}"
-            if award_achievement(user_id, code):
-                try:
-                    await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
-                except Exception:
-                    pass
+        # Award streak achievements
+        for threshold in (5,10,30,50,100,365):
+            if streak == threshold:
+                code = f"streak_{threshold}"
+                if award_achievement(user_id, code):
+                    try:
+                        await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
+                    except Exception:
+                        pass
+        # Total achievements
+        for ttot in (1000,5000):
+            if user_data['total_drочка'] == ttot:
+                code = f"total_{ttot}"
+                if award_achievement(user_id, code):
+                    try:
+                        await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
+                    except Exception:
+                        pass
     else:
         # Уже сегодня — показываем время до локальной полуночи
         delta = next_midnight_delta()
@@ -304,7 +433,6 @@ async def cmd_profile(message: Message):
     ud = get_or_init_user(uid, username)
     # Level formula: lvl = floor(sqrt(xp/10))* (simple)
     xp = ud.get('xp',0)
-    import math
     level = int(math.sqrt(xp/10)) if xp>0 else 0
     elo = ud.get('elo_ttt',1000)
     streak = ud.get('current_streak',0)
@@ -314,6 +442,21 @@ async def cmd_profile(message: Message):
     status = ud.get('profile_status') or '—'
     ttt_w = ud.get('ttt_wins',0)
     ttt_l = ud.get('ttt_losses',0)
+    recovery_info = ''
+    if ud.get('recovery_available') and ud.get('recovery_stored',0) > 0:
+        # check expiry
+        exp_raw = ud.get('recovery_expires')
+        if exp_raw:
+            try:
+                exp_dt = datetime.fromisoformat(exp_raw)
+                if exp_dt < now_tz():
+                    ud['recovery_available']=0; ud['recovery_stored']=0; ud['recovery_expires']=None; persist_user(uid, ud)
+                else:
+                    left = exp_dt - now_tz()
+                    hrs = int(left.total_seconds()//3600)
+                    recovery_info = f"\n♻ Доступно восстановление {ud['recovery_stored']//2} стрика (/recover) ~ {hrs}ч" if ud['recovery_stored']>=10 else ''
+            except Exception:
+                pass
     response = (
         f"👤 Профиль: {username}\n"
         f"LVL: {level} | XP: {xp}\n"
@@ -322,7 +465,7 @@ async def cmd_profile(message: Message):
         f"Дрочков всего: {ud.get('total_drочка',0)}\n"
         f"Pet: {pet}\n"
         f"TicTacToe: {ttt_w}W/{ttt_l}L | ELO {elo}\n"
-        f"Статус: {status}"
+        f"Статус: {status}{recovery_info}"
     )
     await message.answer(response)
 
@@ -433,6 +576,81 @@ async def cmd_drochka_achievements(message: Message):
         desc = ACHIEVEMENTS.get(code, code)
         lines.append(f"• {desc}")
     await message.answer("\n".join(lines))
+
+@router.message(Command(commands=["recover"]))
+async def cmd_recover(message: Message):
+    uid = str(message.from_user.id)
+    data = load_data()
+    if uid not in data:
+        return await message.answer("Нет данных.")
+    ud = data[uid]
+    if not ud.get('recovery_available') or ud.get('recovery_stored',0) < 10:
+        return await message.answer("Нет доступного восстановления.")
+    # check expiry
+    exp_raw = ud.get('recovery_expires')
+    if exp_raw:
+        try:
+            exp_dt = datetime.fromisoformat(exp_raw)
+            if exp_dt < now_tz():
+                ud['recovery_available']=0; ud['recovery_stored']=0; ud['recovery_expires']=None; persist_user(uid, ud)
+                return await message.answer("Срок восстановления истёк.")
+        except Exception:
+            pass
+    restored = max(ud.get('current_streak',0), ud.get('recovery_stored',0)//2)
+    if restored <= ud.get('current_streak',0):
+        return await message.answer("Нечего восстанавливать.")
+    ud['current_streak'] = restored
+    if ud['current_streak'] > ud.get('max_streak',0):
+        ud['max_streak'] = ud['current_streak']
+    ud['recovery_available']=0; ud['recovery_stored']=0; ud['recovery_expires']=None
+    persist_user(uid, ud)
+    await message.answer(f"♻ Восстановлено! Текущая серия теперь {ud['current_streak']}")
+
+@router.message(Command(commands=["daily","квест"]))
+async def cmd_daily(message: Message):
+    uid = str(message.from_user.id)
+    ensure_daily_quest(uid)
+    today = today_key()
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?', (uid, today, 'daily_drochka'))
+    row=cur.fetchone(); conn.close()
+    status = '✅ Выполнен (+2 XP, +1 монета)' if row and row[0]==1 else '⏳ Не выполнен — просто сделай /дрочка сегодня'
+    await message.answer(f"🎯 Daily квест: 'Сделай ежедневку'\nСтатус: {status}")
+
+@router.message(Command(commands=["week","неделя"]))
+async def cmd_week(message: Message):
+    week = current_week_key()
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('SELECT total_actions FROM weekly_progress WHERE week_key=?', (week,))
+    row = cur.fetchone(); total = row[0] if row else 0
+    cur.execute('SELECT COUNT(*) FROM weekly_participants WHERE week_key=?', (week,))
+    pcount = cur.fetchone()[0]
+    conn.close()
+    pct = min(100, (total*100)//WEEKLY_GOAL)
+    await message.answer(f"📆 Неделя {week}\nОбщий прогресс: {total}/{WEEKLY_GOAL} ({pct}%)\nУчастников: {pcount}\nЦель: делайте ежедневку чтобы дойти до цели недели!")
+
+# ===== ELO Update Helper for other modules (e.g., tictactoe) =====
+def update_elo(user_id: str, opponent_id: str, result: float):
+    """Update ELO ratings. result: 1=win,0=loss,0.5=draw for user_id perspective."""
+    data = load_data()
+    if user_id not in data or opponent_id not in data:
+        return
+    K = 32
+    u = data[user_id]; o = data[opponent_id]
+    Ru = u.get('elo_ttt',1000); Ro = o.get('elo_ttt',1000)
+    Eu = 1/(1+10**((Ro-Ru)/400))
+    new_Ru = int(round(Ru + K*(result - Eu)))
+    Eo = 1/(1+10**((Ru-Ro)/400))
+    new_Ro = int(round(Ro + K*((1-result) - Eo)))
+    u['elo_ttt']=new_Ru; o['elo_ttt']=new_Ro
+    if result == 1:
+        u['ttt_wins']=u.get('ttt_wins',0)+1; o['ttt_losses']=o.get('ttt_losses',0)+1
+    elif result == 0:
+        o['ttt_wins']=o.get('ttt_wins',0)+1; u['ttt_losses']=u.get('ttt_losses',0)+1
+    else:
+        # draw doesn't count for wins/losses
+        pass
+    persist_user(user_id, u); persist_user(opponent_id, o)
 
 async def check_breaks_and_notify(bot):
     """Периодическая проверка: у кого междрочечный перерыв >34ч — сбрасываем серию и уведомляем."""

@@ -3,6 +3,7 @@ from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
+from .drочка import update_elo
 
 router = Router(name="tictactoe")
 
@@ -255,6 +256,12 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
             winner_id = game["player_x"] if player_symbol == PLAYER_X else game["player_o"]
             winner_name = await get_user_name_by_id(bot, winner_id)
             
+            # Update ELO: winner result=1, loser result=0
+            loser_id = game["player_o"] if winner_id == game["player_x"] else game["player_x"]
+            try:
+                update_elo(str(winner_id), str(loser_id), 1)
+            except Exception:
+                pass
             # Notify about win
             await callback.message.edit_text(
                 f"🎉 Победа! 🎉\n"
@@ -270,6 +277,12 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
             player_x_name = await get_user_name_by_id(bot, game["player_x"])
             player_o_name = await get_user_name_by_id(bot, game["player_o"])
             
+            # Update ELO for draw (0.5 each)
+            try:
+                update_elo(str(game['player_x']), str(game['player_o']), 0.5)
+                update_elo(str(game['player_o']), str(game['player_x']), 0.5)
+            except Exception:
+                pass
             # Notify about tie
             await callback.message.edit_text(
                 f"🤝 Ничья! 🤝\n"
@@ -323,6 +336,11 @@ async def handle_tictactoe_callback(callback: CallbackQuery, bot):
         winner_id = game["player_o"] if player_id == game["player_x"] else game["player_x"]
         winner_name = await get_user_name_by_id(bot, winner_id)
             
+        # Update ELO surrender counts as loss for surrenderer
+        try:
+            update_elo(str(winner_id), str(player_id), 1)
+        except Exception:
+            pass
         # Notify about surrender
         await callback.message.edit_text(
             f"🏳️ {surrenderer_name} сдался!\n"
