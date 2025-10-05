@@ -111,6 +111,9 @@ def target_choice_keyboard(game: TruthOrDareGame, target_id: int):
     kb.button(text="Random", callback_data="tod:choice:random")
     if game.pass_available(target_id):
         kb.button(text="Пас", callback_data="tod:choice:pass")
+    # Кнопка завершения доступна создателю, чтобы можно было закончить в любой момент
+    if game.creator_id in game.players:
+        kb.button(text="Завершить", callback_data="tod:finish")
     kb.adjust(3,1,1)
     return kb
 
@@ -325,6 +328,19 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
             f"🕵️ {mention_name(asker_id, game.player_names[asker_id])} пишет секретное {'вопрос' if picked_type=='truth' else 'задание'} для {mention_name(user_id, game.player_names[user_id])}…",
             parse_mode='HTML')
         return await cb.answer("Жду ввод от спрашивающего")
+
+    # Завершение игры через кнопку (универсально для обоих режимов)
+    if parts[1]=="finish":
+        if chat_id not in active_games: return await cb.answer()
+        game = active_games[chat_id]
+        if user_id != game.creator_id:
+            return await cb.answer("Только создатель")
+        del active_games[chat_id]
+        try:
+            await cb.message.edit_text("Игра завершена создателем.")
+        except Exception:
+            await cb.answer("Игра завершена")
+        return await cb.answer("Готово")
 
     # выбор типа ANYONE режима -> выбор цели обрабатывается ниже в parts[1]=="target"
     # выбор цели в режиме ANYONE
