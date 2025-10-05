@@ -10,5 +10,16 @@ dist
 .git
 .gitignore
 .env
+.env.*
 *.log
 **/.pytest_cache
+.vscode/
+.idea/
+*.sqlite
+*.db
+Thumbs.db
+.DS_Store
+~$*
+coverage/
+pytest_cache/
+*.prof
