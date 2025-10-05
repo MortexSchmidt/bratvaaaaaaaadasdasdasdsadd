@@ -165,7 +165,7 @@ def get_or_init_user(user_id: str, username: str) -> dict:
             "total_drочка": 0,
             "current_streak": 0,
             "max_streak": 0,
-            "pet_name": None,
+            "pet_name": "Дрочик",
             "break_notified": 0,
             "xp": 0,
             "coins": 0,
@@ -310,7 +310,7 @@ async def cmd_profile(message: Message):
     streak = ud.get('current_streak',0)
     max_streak = ud.get('max_streak',0)
     coins = ud.get('coins',0)
-    pet = ud.get('pet_name') or '—'
+    pet = ud.get('pet_name') or 'Дрочик'
     status = ud.get('profile_status') or '—'
     ttt_w = ud.get('ttt_wins',0)
     ttt_l = ud.get('ttt_losses',0)
