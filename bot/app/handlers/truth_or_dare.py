@@ -286,29 +286,45 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
                 reply_markup=target_choice_keyboard(game, nxt_target).as_markup())
             return await cb.answer("Пас")
         if choice not in {"truth","dare","random"}: return await cb.answer()
-        picked_type = choice
-        if picked_type == "random":
-            picked_type = random.choice(["truth","dare"])
-        game.current_task_type = picked_type
         asker_id = game.current_player_id()
-        # random в смысле цель нажала random -> уже выбран picked_type, но контент ещё не известен: генерируем сразу
-        # Генерация и отправка приватно цели
-        game.current_task = random_truth() if picked_type=="truth" else random_dare()
-        game.target_player_id = user_id
-        game.phase = "task_active"
+        # RANDOM: сразу создаём и отправляем
+        if choice == "random":
+            picked_type = random.choice(["truth","dare"])
+            game.current_task_type = picked_type
+            game.current_task = random_truth() if picked_type=="truth" else random_dare()
+            game.target_player_id = user_id
+            game.phase = "task_active"
+            try:
+                await cb.bot.send_message(user_id,
+                    f"🤫 Твоё секретное <b>{'Правда' if picked_type=='truth' else 'Действие'}</b> (случайное):\n\n{game.current_task}\n\nКогда выполнишь — вернись и нажми 'Задание выполнено'.",
+                    parse_mode='HTML')
+            except Exception:
+                await cb.message.answer(
+                    f"⚠️ Не могу написать {mention_name(user_id, game.player_names[user_id])} — /start в ЛС.",
+                    parse_mode='HTML')
+            await cb.message.edit_text(
+                f"🎲 {'Правда' if picked_type=='truth' else 'Действие'} выдано {mention_name(user_id, game.player_names[user_id])}.\n⏳ Ждём выполнения…",
+                parse_mode='HTML',
+                reply_markup=waiting_task_keyboard().as_markup())
+            return await cb.answer()
+        # TRUTH или DARE: спрашивающий должен придумать
+        picked_type = choice  # 'truth' или 'dare'
+        game.current_task_type = picked_type
+        game.phase = "awaiting_content"
+        waiting_for_input[asker_id] = {
+            "type": picked_type,
+            "target": user_id,
+            "chat_id": chat_id
+        }
         try:
-            await cb.bot.send_message(user_id,
-                f"🤫 Твоё секретное <b>{'Правда' if picked_type=='truth' else 'Действие'}</b>:\n\n{game.current_task}\n\nКогда выполнишь — вернись и нажми 'Задание выполнено'.",
-                parse_mode='HTML')
+            await cb.bot.send_message(asker_id,
+                f"✍️ Введи {'вопрос (Правда)' if picked_type=='truth' else 'задание (Действие)'} для {game.player_names[user_id]} одним сообщением.")
         except Exception:
-            await cb.message.answer(
-                f"⚠️ Не могу написать {mention_name(user_id, game.player_names[user_id])} — /start в ЛС.",
-                parse_mode='HTML')
+            await cb.message.answer("⚠️ Спрашивающему нужно /start в ЛС, иначе не смогу получить текст.")
         await cb.message.edit_text(
-            f"🎲 {'Правда' if picked_type=='truth' else 'Действие'} выдано {mention_name(user_id, game.player_names[user_id])}.\n⏳ Ждём выполнения…",
-            parse_mode='HTML',
-            reply_markup=waiting_task_keyboard().as_markup())
-        return await cb.answer()
+            f"🕵️ {mention_name(asker_id, game.player_names[asker_id])} пишет секретное {'вопрос' if picked_type=='truth' else 'задание'} для {mention_name(user_id, game.player_names[user_id])}…",
+            parse_mode='HTML')
+        return await cb.answer("Жду ввод от спрашивающего")
 
     # выбор типа ANYONE режима -> выбор цели обрабатывается ниже в parts[1]=="target"
     # выбор цели в режиме ANYONE
