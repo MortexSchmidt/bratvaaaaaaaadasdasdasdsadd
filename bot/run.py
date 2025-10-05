@@ -61,35 +61,42 @@ async def main():
         stats = await broadcast(bot, config.admins, parts[1])
         await message.answer(f"Рассылка завершена: {stats}")
 
+    BASE_COMMANDS = [
+        ("start", "Начать"),
+        ("help", "Справка"),
+        ("ping", "Проверка"),
+        ("echo", "Эхо текст"),
+        ("fun", "Случайная фаза"),
+        ("groupinfo", "Инфо о группе"),
+        ("whoami", "Ваш ID"),
+        ("id", "То же что /whoami"),
+        # Mafia
+        ("mafia", "Инфо о мафии"),
+        ("mafia_start", "Начать мафию"),
+        ("join_mafia", "Присоединиться"),
+        ("start_game_mafia", "Старт игры мафия"),
+        ("vote", "Голосовать @user"),
+        ("kill_mafia", "Убить ночью"),
+        ("heal_mafia", "Лечить ночью"),
+        ("check_mafia", "Проверить ночью"),
+        # Drochka
+        ("drochka", "Дрочка сегодня"),
+        ("drochka_stats", "Стата дрочки"),
+        ("drochka_top", "Топ серия"),
+        ("drochka_achievements", "Ачивки дрочки"),
+        ("drochka_name", "Имя дрочика"),
+        # Games
+        ("tictactoe", "Крестики-нолики"),
+        # Truth or Dare
+        ("truthordare", "Правда или Действие"),
+        ("tod", "П/Д (коротко)"),
+        ("tod_help", "Помощь П/Д"),
+        ("end_tod", "Стоп П/Д"),
+        ("stop_tod", "Стоп П/Д"),
+    ]
+
     async def setup_commands():
-        base_cmds = [
-            ("start", "Начать"),
-            ("help", "Справка"),
-            ("ping", "Проверка"),
-            ("echo", "Эхо текст"),
-            ("fun", "Случайная фаза"),
-            ("groupinfo", "Инфо о группе"),
-            ("whoami", "Ваш ID"),
-            ("id", "То же что /whoami"),
-            ("mafia", "Инфо о мафии"),
-            ("mafia_start", "Начать игру в мафию"),
-            ("join_mafia", "Присоединиться"),
-            ("start_game_mafia", "Запустить игру"),
-            ("vote", "Голосовать @user"),
-            ("kill_mafia", "Убить ночью"),
-            ("heal_mafia", "Лечить ночью"),
-            ("check_mafia", "Проверить ночью"),
-            ("drochka", "Поработать рукой"),
-            ("drochka_stats", "Статистика дрочки"),
-            ("drochka_top", "Топ по серии"),
-            ("drochka_achievements", "Дрочка ачивки"),
-            ("drochka_name", "Имя дрочика"),
-            ("tictactoe", "Играть в крестики-нолики"),  # Added Tic Tac Toe command
-            ("truthordare", "Играть в правду или действие"),  # Added Truth or Dare command
-            ("tod", "Играть в правду или действие"),  # Added Truth or Dare command (short version)
-            ("end_tod", "Завершить игру в правду или действие"),  # Added end Truth or Dare command
-            ("stop_tod", "Завершить игру в правду или действие"),  # Added stop Truth or Dare command
-        ]
+        base_cmds = BASE_COMMANDS
         # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
         await bot.set_my_commands(
             [BotCommand(command=c, description=d) for c, d in base_cmds],
