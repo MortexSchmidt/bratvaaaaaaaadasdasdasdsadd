@@ -5,11 +5,45 @@ from aiogram.filters import Command
 import sqlite3
 import os
 from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # python <3.9 fallback if ever
+    from backports.zoneinfo import ZoneInfo  # type: ignore
 import asyncio
 from typing import Dict
 from .. import format_user_mention
 
 router = Router(name="drочка")
+
+# ===== Timezone / Midnight Reset =====
+TIMEZONE_NAME = os.getenv("TIMEZONE", "Europe/Kyiv")
+TZ = ZoneInfo(TIMEZONE_NAME)
+GRACE_HOURS = 34  # 1 day 10 hours window to keep streak
+
+def now_tz() -> datetime:
+    return datetime.now(TZ)
+
+def today_key() -> str:
+    return now_tz().date().isoformat()
+
+def next_midnight_delta() -> timedelta:
+    now = now_tz()
+    nm = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return nm - now
+
+def parse_saved_ts(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            # трактуем старые значения как UTC и конвертируем в локальную
+            dt = dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(TZ)
+        else:
+            dt = dt.astimezone(TZ)
+        return dt
+    except Exception:
+        return None
 
 # Database file - use /app/data for persistent storage on Railway
 DB_FILE = os.path.join(os.getenv("DB_DIR", "."), "drochka_data.db")
@@ -114,7 +148,7 @@ ACHIEVEMENTS = {
 }
 
 async def perform_drочка(message: Message):
-    """Perform the drочка action"""
+    """Perform the drочка action (timezone-aware Europe/Kyiv by default)."""
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.full_name or "Аноним"
     
@@ -134,45 +168,26 @@ async def perform_drочка(message: Message):
     
     user_data = data[user_id]
     
-    # Check if user can drочить today
-    can_drочить = True
-    now = datetime.now()
+    # Timezone aware values
+    now = now_tz()
     today = now.date()
-    last_time = None
-    if user_data["last_drочка"]:
-        last_time = datetime.fromisoformat(user_data["last_drочка"])
-        if today == last_time.date():
-            can_drочить = False
+    last_time = parse_saved_ts(user_data.get("last_drочка"))
+    can_drочить = True
+    if last_time and last_time.date() == today:
+        can_drочить = False
     
     if can_drочить:
-        # Определение разрыва для серии с грацией 34 часа (1 день 10 часов)
         if last_time:
             delta_hours = (now - last_time).total_seconds() / 3600
-            # Если уже прошло больше 34 часов со времени последнего — серия сброшена
-            if delta_hours > 34:
+            if delta_hours > GRACE_HOURS:
                 user_data['current_streak'] = 0
-            # Если прошёл ровно один день или в пределах 34 часов — оставляем серию
-            elif delta_hours <= 34 and delta_hours >= 24:
-                # это день без пропуска в пределах окна – нет изменений
-                pass
-            elif delta_hours < 24:
-                # это не должно случиться (мы бы заблокировали попытку выше), но на всякий случай
-                pass
-            else:
-                # delta_hours >34 уже поймано, остальные случаи (большой разрыв)
-                user_data['current_streak'] = 0
-        # Update stats
         user_data["username"] = username
         user_data["last_drочка"] = now.isoformat()
         user_data["total_drочка"] += 1
         user_data["current_streak"] += 1
-        user_data['break_notified'] = 0  # сбрасываем флаг
-        
-        # Update max streak if needed
+        user_data['break_notified'] = 0
         if user_data["current_streak"] > user_data["max_streak"]:
             user_data["max_streak"] = user_data["current_streak"]
-        
-        # Save to database
         save_user_data(
             user_id,
             username,
@@ -183,37 +198,34 @@ async def perform_drочка(message: Message):
             user_data.get("pet_name"),
             user_data.get('break_notified',0)
         )
-
         user_mention = format_user_mention(message.from_user)
         flame = "🔥" * min(user_data['current_streak'], 5)
         pet_part = f" на своего '{user_data['pet_name']}'" if user_data.get('pet_name') else ""
-        response = f"🔥 {user_mention} подрочил{pet_part}! {flame}\n\n"
-        response += "📊 Статистика:\n"
-        response += f"Всего дрочков: {user_data['total_drочка']}\n"
-        response += f"Текущая серия: {user_data['current_streak']} (макс: {user_data['max_streak']})"
-        # Achievement check
+        response = (
+            f"🔥 {user_mention} подрочил{pet_part}! {flame}\n\n"
+            f"📊 Статистика:\n"
+            f"Всего дрочков: {user_data['total_drочка']}\n"
+            f"Текущая серия: {user_data['current_streak']} (макс: {user_data['max_streak']})"
+        )
         streak = user_data['current_streak']
-        ach_to_check = []
         if streak in (5,10,30):
-            ach_to_check.append(f'streak_{streak}')
-        for code in ach_to_check:
+            code = f"streak_{streak}"
             if award_achievement(user_id, code):
                 try:
                     await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
                 except Exception:
                     pass
     else:
-        last_time = datetime.fromisoformat(user_data["last_drочка"])
-        # время до полуночи
-        midnight_next = datetime.combine(today + timedelta(days=1), datetime.min.time())
-        delta = midnight_next - now
-        hours, remainder = divmod(delta.seconds, 3600)
+        # Уже сегодня — показываем время до локальной полуночи
+        delta = next_midnight_delta()
+        hours, remainder = divmod(int(delta.total_seconds()), 3600)
         minutes, _ = divmod(remainder, 60)
-        
         user_mention = format_user_mention(message.from_user)
         pet_part = f" своего '{user_data['pet_name']}'" if user_data.get('pet_name') else ""
-        response = f"⏳ {user_mention}, ты уже дрочил{pet_part} сегодня!\n"
-        response += f"Следующая возможность в 00:00 (через ~ {hours} ч {minutes} мин)"
+        response = (
+            f"⏳ {user_mention}, ты уже дрочил{pet_part} сегодня!\n"
+            f"Следующая возможность в 00:00 (таймзона {TIMEZONE_NAME}) через ~ {hours} ч {minutes} мин"
+        )
     
     await message.answer(response)
 
@@ -246,8 +258,9 @@ async def cmd_drочка_stats(message: Message):
     response += f"Максимальная серия: {user_data['max_streak']}\n"
     
     if user_data["last_drочка"]:
-        last_time = datetime.fromisoformat(user_data["last_drочка"])
-        response += f"Последний дрочок: {last_time.strftime('%d.%m.%Y %H:%M')}"
+        last_time = parse_saved_ts(user_data["last_drочка"])
+        if last_time:
+            response += f"Последний дрочок: {last_time.strftime('%d.%m.%Y %H:%M')} ({TIMEZONE_NAME})"
     
     await message.answer(response)
 
@@ -320,17 +333,16 @@ async def check_breaks_and_notify(bot):
             cur = conn.cursor()
             cur.execute('SELECT user_id, last_drочка, current_streak, break_notified FROM user_stats')
             rows = cur.fetchall()
-            now = datetime.utcnow()
+            now = now_tz()
             changed = []
             for uid, last_ts, streak, notified in rows:
                 if not last_ts or streak == 0:
                     continue
-                try:
-                    lt = datetime.fromisoformat(last_ts)
-                except Exception:
+                lt = parse_saved_ts(last_ts)
+                if not lt:
                     continue
                 delta_hours = (now - lt).total_seconds()/3600
-                if delta_hours > 34 and not notified:
+                if delta_hours > GRACE_HOURS and not notified:
                     # сброс серии
                     changed.append(uid)
                     try:
