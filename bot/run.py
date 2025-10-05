@@ -1,19 +1,60 @@
 from __future__ import annotations
 import asyncio
 import sqlite3
+import logging
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeDefault
 from app import load_config
-from app.handlers import basic, fun
-from app.handlers import group as group_handlers
-from app.handlers import mafia
-from app.handlers import drochka  # Renamed from drочка
-from app.handlers import rp  # Added RP handler
-from app.handlers import ai  # Added AI handler
-from app.handlers import tictactoe  # Added Tic Tac Toe handler
-from app.handlers import truth_or_dare  # Added Truth or Dare handler
-from app.handlers import diagnostic  # Diagnostic tools
+
+# Import handlers with error checking
+def safe_import(module_name, description):
+    try:
+        if module_name == "basic":
+            from app.handlers import basic
+            return basic
+        elif module_name == "fun":
+            from app.handlers import fun
+            return fun
+        elif module_name == "group":
+            from app.handlers import group as group_handlers
+            return group_handlers
+        elif module_name == "mafia":
+            from app.handlers import mafia
+            return mafia
+        elif module_name == "drochka":
+            from app.handlers import drochka
+            return drochka
+        elif module_name == "rp":
+            from app.handlers import rp
+            return rp
+        elif module_name == "ai":
+            from app.handlers import ai
+            return ai
+        elif module_name == "tictactoe":
+            from app.handlers import tictactoe
+            return tictactoe
+        elif module_name == "truth_or_dare":
+            from app.handlers import truth_or_dare
+            return truth_or_dare
+        elif module_name == "diagnostic":
+            from app.handlers import diagnostic
+            return diagnostic
+    except Exception as e:
+        logging.error(f"Failed to import {description} ({module_name}): {e}")
+        return None
+
+# Try importing all handlers
+basic = safe_import("basic", "basic handlers")
+fun = safe_import("fun", "fun handlers")
+group_handlers = safe_import("group", "group handlers")
+mafia = safe_import("mafia", "mafia handlers")
+drochka = safe_import("drochka", "drochka handlers")
+rp = safe_import("rp", "RP handlers")
+ai = safe_import("ai", "AI handlers")
+tictactoe = safe_import("tictactoe", "TicTacToe handlers")
+truth_or_dare = safe_import("truth_or_dare", "Truth or Dare handlers")
+diagnostic = safe_import("diagnostic", "diagnostic handlers")
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -45,33 +86,34 @@ async def main():
 
     # Initialize the database for drochka system
     try:
-        drochka.init_db()
-        logging.info("Database initialized successfully (file: %s)", getattr(drochka,'DB_FILE','?'))
+        if drochka:
+            drochka.init_db()
+            logging.info("Database initialized successfully (file: %s)", getattr(drochka,'DB_FILE','?'))
+        else:
+            logging.warning("Drochka module not loaded, skipping DB init")
     except Exception as e:
         logging.error(f"Failed to initialize database: {e}")
 
     # регистрация роутеров
-    logging.info("Registering basic router...")
-    dp.include_router(basic.router)
-    logging.info("Registering fun router...")
-    dp.include_router(fun.router)
-    logging.info("Registering group router...")
-    dp.include_router(group_handlers.router)
-    logging.info("Registering mafia router...")
-    dp.include_router(mafia.router)
-    logging.info("Registering drochka router...")
-    dp.include_router(drochka.router)  # Register drochka router
-    logging.info("Registering rp router...")
-    dp.include_router(rp.router)  # Register RP router
-    logging.info("Registering ai router...")
-    dp.include_router(ai.router)  # Register AI router
-    logging.info("Registering tictactoe router...")
-    dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
-    logging.info("Registering truth_or_dare router...")
-    dp.include_router(truth_or_dare.router) # Register Truth or Dare router
-    logging.info("Registering diagnostic router...")
-    # Диагностика в конце: fallback теперь не блокирует другие
-    dp.include_router(diagnostic.router)
+    handlers_to_register = [
+        (basic, "basic"),
+        (fun, "fun"),
+        (group_handlers, "group"),
+        (mafia, "mafia"),
+        (drochka, "drochka"),
+        (rp, "rp"),
+        (ai, "ai"),
+        (tictactoe, "tictactoe"),
+        (truth_or_dare, "truth_or_dare"),
+        (diagnostic, "diagnostic")  # последний для fallback
+    ]
+    
+    for handler_module, name in handlers_to_register:
+        if handler_module and hasattr(handler_module, 'router'):
+            logging.info(f"Registering {name} router...")
+            dp.include_router(handler_module.router)
+        else:
+            logging.warning(f"Skipping {name} router (import failed or no router attribute)")
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -150,7 +192,8 @@ async def main():
     print("Запуск бота...")
     await setup_commands()
     # Запускаем периодический таск проверки перерывов дрочки
-    asyncio.create_task(drochka.check_breaks_and_notify(bot))
+    if drochka and hasattr(drochka, 'check_breaks_and_notify'):
+        asyncio.create_task(drochka.check_breaks_and_notify(bot))
     await bot.delete_webhook(drop_pending_updates=True)
     # Используем polling в режиме, подходящем для многопоточной среды
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
