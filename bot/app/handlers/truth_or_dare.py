@@ -1,14 +1,22 @@
 from __future__ import annotations
 from aiogram import Router, Bot
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from typing import Dict, List, Optional
 import json
 import random
 import os
+import logging
+import hmac
+import hashlib
+from datetime import datetime
 
 router = Router(name="truth_or_dare")
+
+# Base configuration for Mini-App integration (env overrideable)
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://your-real-domain.com/mini_apps/truth_or_dare/")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")  # Used for optional signature in generate_mini_app_url
 
 # Load game content
 CONTENT_FILE = os.path.join(os.path.dirname(__file__), '..', 'truth_or_dare_content.json')
@@ -222,31 +230,34 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
     chat_id = callback.message.chat.id
      
     if action == "start_miniapp":
-        # Запуск улучшенной Mini-App
+        # Запуск улучшенной Mini-App (WebApp)
         user = callback.from_user
-        # Создаем подпись для аутентификации в Mini-App
-        payload = f"user_id={user.id}&username={user.username or ''}&first_name={user.first_name}&last_name={user.last_name or ''}"
-        
-        # В реальной реализации нужно использовать WebApp и подпись
-        # Пока используем простую ссылку на Mini-App
-        mini_app_url = "https://your-bot-domain.onrender.com/mini_apps/truth_or_dare/"
-        
-        # Создаем клавиатуру с кнопкой для открытия Mini-App
+        logging.getLogger(__name__).info("User %s (%s) clicked start_miniapp", user.id, user.username)
+
+        # Используем настроенный URL (можно подписать, если нужно)
+        mini_app_url = WEB_APP_URL.rstrip('/') + '/'
+
+        # Клавиатура с корректным WebAppInfo (aiogram ожидает объект, а не dict)
         builder = InlineKeyboardBuilder()
-        builder.button(text="🎮 Открыть улучшенную Mini-App", web_app={"url": mini_app_url})
+        builder.button(
+            text="🎮 Открыть улучшенную Mini-App", 
+            web_app=WebAppInfo(url=mini_app_url)
+        )
         builder.button(text="◀️ Назад", callback_data="tod:back_to_options")
         builder.adjust(1, 1)
-        
+
         await callback.message.edit_text(
-            f"🎮 <b>Улучшенная Mini-App 'Правда или Действие 2.0'</b> 🎮\n\n"
-            f"Привет, <b>{user.first_name}</b>! 👋\n\n"
-            f"✨ <b>Новые возможности:</b>\n"
-            f"• Улучшенный интерфейс с анимациями\n"
-            f"• Режимы игры: по часовой и кому угодно\n"
-            f"• Настройка сложности заданий\n"
-            f"• Темная/светлая тема\n"
-            f"• Прогресс игры и история заданий\n\n"
-            f"Нажмите кнопку ниже, чтобы открыть улучшенную версию игры!",
+            (
+                "🎮 <b>Улучшенная Mini-App 'Правда или Действие 2.0'</b> 🎮\n\n"
+                f"Привет, <b>{user.first_name}</b>! 👋\n\n"
+                "✨ <b>Новые возможности:</b>\n"
+                "• Улучшенный интерфейс с анимациями\n"
+                "• Режимы игры: по часовой и кому угодно\n"
+                "• Настройка сложности заданий\n"
+                "• Темная/светлая тема\n"
+                "• Прогресс игры и история заданий\n\n"
+                "Нажмите кнопку ниже, чтобы открыть улучшенную версию игры!"
+            ),
             reply_markup=builder.as_markup()
         )
         await callback.answer()
