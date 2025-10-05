@@ -3,10 +3,17 @@ from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
+from aiogram.utils.web_app import create_web_app_data
 from typing import Dict, List, Optional
 import json
 import random
 import os
+from datetime import datetime
+import hashlib
+import hmac
+# Конфигурация для WebApp
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://your-bot-domain.onrender.com/mini_apps/truth_or_dare/")
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Требуется для генерации WebApp initData
 
 router = Router(name="truth_or_dare")
 
@@ -184,7 +191,7 @@ async def start_truth_or_dare(message: Message):
     if chat_id in active_games or chat_id in lobbies:
         await message.answer("В этом чате уже идет игра или есть активное лобби! Дождитесь окончания или используйте /end_tod.")
         return
-    
+     
     # Initialize lobby with just the starter
     starter_id = message.from_user.id
     starter_name = message.from_user.first_name or "Игрок"
@@ -194,8 +201,14 @@ async def start_truth_or_dare(message: Message):
         "player_names": {starter_id: starter_name},
         "player_usernames": {starter_id: starter_username}
     }
+     
+    # Create keyboard with both old and new options
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🎮 Классическая игра", callback_data="tod:start_classic")
+    builder.button(text="⚡ Улучшенная Mini-App", callback_data="tod:start_miniapp")
+    builder.adjust(1, 1)
     
-    # Send message asking for game mode selection with clearer instructions
+    # Send message with both options
     await message.answer(
         "🎉 <b>Добро пожаловать в 'Правда или Действие 2.0'!</b> 🎉\n\n"
         "🌟 <b>Как играть:</b>\n"
@@ -205,7 +218,7 @@ async def start_truth_or_dare(message: Message):
         "4. По очереди задавайте 'Правду' или 'Действие' другим игрокам\n"
         "5. Выполняйте задания и веселитесь!\n\n"
         "🎯 <b>Выберите режим игры:</b>",
-        reply_markup=create_game_modes_keyboard()
+        reply_markup=builder.as_markup()
     )
 
 @router.callback_query(lambda c: c.data and c.data.startswith("tod:"))
@@ -214,16 +227,68 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
     data_parts = callback.data.split(":")
     action = data_parts[1]
     chat_id = callback.message.chat.id
+     
+    if action == "start_miniapp":
+        # Запуск улучшенной Mini-App
+        user = callback.from_user
+        # Создаем подпись для аутентификации в Mini-App
+        payload = f"user_id={user.id}&username={user.username or ''}&first_name={user.first_name}&last_name={user.last_name or ''}"
+        
+        # В реальной реализации нужно использовать WebApp и подпись
+        # Пока используем простую ссылку на Mini-App
+        mini_app_url = "https://your-bot-domain.onrender.com/mini_apps/truth_or_dare/"
+        
+        # Создаем клавиатуру с кнопкой для открытия Mini-App
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🎮 Открыть улучшенную Mini-App", web_app={"url": mini_app_url})
+        builder.button(text="◀️ Назад", callback_data="tod:back_to_options")
+        builder.adjust(1, 1)
+        
+        await callback.message.edit_text(
+            f"🎮 <b>Улучшенная Mini-App 'Правда или Действие 2.0'</b> 🎮\n\n"
+            f"Привет, <b>{user.first_name}</b>! 👋\n\n"
+            f"✨ <b>Новые возможности:</b>\n"
+            f"• Улучшенный интерфейс с анимациями\n"
+            f"• Режимы игры: по часовой и кому угодно\n"
+            f"• Настройка сложности заданий\n"
+            f"• Темная/светлая тема\n"
+            f"• Прогресс игры и история заданий\n\n"
+            f"Нажмите кнопку ниже, чтобы открыть улучшенную версию игры!",
+            reply_markup=builder.as_markup()
+        )
+        await callback.answer()
     
-    if action == "mode":
+    elif action == "start_classic":
+        # Классический режим - продолжаем с выбора режима игры
+        await callback.message.edit_text(
+            "🎯 <b>Выберите режим игры:</b>",
+            reply_markup=create_game_modes_keyboard()
+        )
+        await callback.answer()
+    
+    elif action == "back_to_options":
+        # Возврат к выбору режима
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🎮 Классическая игра", callback_data="tod:start_classic")
+        builder.button(text="⚡ Улучшенная Mini-App", callback_data="tod:start_miniapp")
+        builder.adjust(1, 1)
+        
+        await callback.message.edit_text(
+            "🎉 <b>Добро пожаловать в 'Правда или Действие 2.0'!</b> 🎉\n\n"
+            "🎯 <b>Выберите режим игры:</b>",
+            reply_markup=builder.as_markup()
+        )
+        await callback.answer()
+    
+    elif action == "mode":
         # Handle mode selection
         mode = data_parts[2]
-        
+         
         # Store the selected mode temporarily
         if chat_id not in lobbies:
             lobbies[chat_id] = {}
         lobbies[chat_id]["mode"] = mode
-        
+         
         # Ask for rules mode
         await callback.message.edit_text(
             "📜 <b>Выберите режим правил:</b>\n\n"
@@ -231,7 +296,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             "❌ <b>Без правил:</b> Неограниченные пасы, любая сложность",
             reply_markup=create_rules_modes_keyboard()
         )
-        
+         
         await callback.answer()
         
     elif action == "rules":
@@ -528,11 +593,11 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 await callback.message.answer(lobby_text, reply_markup=create_lobby_keyboard(is_creator), parse_mode='HTML', disable_web_page_preview=True)
             
             # Notify all lobby members about the new join (except the joining player)
-            for player_id in lobby["players"]:
-                if player_id != joining_player_id:  # Skip the joining player
+            for pid in lobby["players"]:
+                if pid != joining_player_id:  # Skip the joining player
                     try:
                         await bot.send_message(
-                            player_id,
+                            pid,
                             f"🎉 <b>{player_name} присоединился к лобби!</b>\n"
                             f"👥 Всего игроков: {len(lobby['players'])}",
                             parse_mode='HTML',
@@ -572,41 +637,6 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             except Exception:
                 pass  # Message might be too old to edit
 
-            # Update main lobby message to ensure creator sees the start button and instructions
-            creator_text = (
-                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
-                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
-                f"📜 <b>Правила:</b> {rules_description}\n\n"
-                f"👥 <b>Игроки ({len(players)}):</b>\n"
-            )
-
-            for pid in players:
-                name = get_player_display_name(pid, player_names, player_usernames)
-                creator_text += f"• {name}\n"
-
-            creator_text += "\n🎮 <b>Нажмите 'Начать игру' когда все соберутся!</b>"
-            creator_text += "\n\n<b>📖 Как играть:</b>\n"
-            creator_text += "1. Нажмите <b>'Начать игру'</b> когда все игроки присоединятся\n"
-            creator_text += "2. Игра начнется, первый игрок сделает свой ход\n"
-            creator_text += "3. По очереди задавайте 'Правду' или 'Действие' другим игрокам\n"
-            creator_text += "4. Выполняйте задания и веселитесь!\n\n"
-            creator_text += "<i>🎮 Удачи в игре!</i>"
-
-            # Update main lobby message to ensure creator sees the start button
-            lobby_msg_id = lobbies[chat_id]["message_id"]
-            if lobby_msg_id:
-                try:
-                    await bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=lobby_msg_id,
-                        text=creator_text,
-                        reply_markup=create_lobby_keyboard(True),  # Creator always sees start button
-                        parse_mode='HTML',
-                        disable_web_page_preview=True
-                    )
-                except Exception:
-                    pass  # Message might be too old to edit
-
             await callback.answer("Вы успешно присоединились к лобби!", show_alert=False)
 
         elif sub_action == "start":
@@ -639,7 +669,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 rules_description = (
                     "\n📜 <b>Правила игры:</b>\n"
                     "• Никаких сексуальных, насильственных, оскорбительных или опасных заданий\n"
-                    "• Запрещено заставлять делать то, что может привести к травме, нарушить закон или задеть чувства человека\n"
+                    "• Запрещено заставлять делать то, что может прискоединить к травме, нарушить закон или задеть чувства человека\n"
                     "• Пас можно использовать 1 раз за игру\n\n"
                 )
             else:
@@ -663,7 +693,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 f"5. Бот доставляет задание следующему игроку\n"
                 f"6. После выполнения задания, ход переходит дальше\n\n"
                 f"🎮 <i>Игра началась! Удачи всем участникам!</i>",
-                parse_mode='HTML'
+                parse_mode='HTML',
+                disable_web_page_preview=True
             )
 
             await callback.answer()
@@ -1014,3 +1045,48 @@ async def handle_all_messages(message: Message, bot: Bot):
                 else:
                     # This is a general message, not a response to a truth/dare
                     pass
+async def generate_mini_app_url(user):
+    """
+    Генерирует безопасную ссылку на Mini-App с аутентификацией
+    """
+    if not BOT_TOKEN:
+        # Если токен бота не задан, возвращаем базовую ссылку
+        return WEB_APP_URL
+    
+    # Подготовка данных для WebApp
+    auth_date = int(datetime.now().timestamp())
+    hash_data = [
+        f"auth_date={auth_date}",
+        f"user={user.id}",
+        f"first_name={user.first_name}",
+    ]
+    
+    if user.last_name:
+        hash_data.append(f"last_name={user.last_name}")
+    if user.username:
+        hash_data.append(f"username={user.username}")
+    
+    # Сортировка по ключам для правильного формата данных
+    data_check_arr = sorted(hash_data)
+    data_check_string = "\n".join(data_check_arr)
+    
+    # Создание ключа шифрования
+    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    # Создание хэша для проверки
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    
+    # Формирование строки параметров
+    params = [
+        f"auth_date={auth_date}",
+        f"user_id={user.id}",
+        f"first_name={user.first_name}",
+        f"hash={calculated_hash}"
+    ]
+    
+    if user.last_name:
+        params.append(f"last_name={user.last_name}")
+    if user.username:
+        params.append(f"username={user.username}")
+    
+    query_string = "&".join(params)
+    return f"{WEB_APP_URL}?{query_string}"

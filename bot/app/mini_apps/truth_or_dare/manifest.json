@@ -1,0 +1,41 @@
+{
+  "name": "Правда или Действие 2.0",
+  "short_name": "Правда или Действие",
+  "description": "Улучшенная увлекательная игра 'Правда или Действие' прямо в Telegram",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#4361ee",
+  "theme_color": "#4361ee",
+  "orientation": "portrait",
+  "lang": "ru-RU",
+  "dir": "ltr",
+  "categories": ["games", "entertainment", "social"],
+  "shortcuts": [
+    {
+      "name": "Создать лобби",
+      "short_name": "Создать",
+      "description": "Создать новое лобби для игры",
+      "url": "/?action=create_lobby",
+      "icons": [{"src": "create-lobby-icon.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Присоединиться",
+      "short_name": "Войти",
+      "description": "Присоединиться к существующему лобби",
+      "url": "/?action=join_lobby",
+      "icons": [{"src": "join-lobby-icon.png", "sizes": "192x192"}]
+    }
+ ]
+}

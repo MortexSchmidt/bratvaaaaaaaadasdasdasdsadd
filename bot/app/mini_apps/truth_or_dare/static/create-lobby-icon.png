@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="192" height="192" viewBox="0 192 192" xmlns="http://www.w3.org/2000/svg">
+ <rect width="192" height="192" fill="#4cc9f0"/>
+  <circle cx="96" cy="96" r="56" fill="#4361ee" opacity="0.9"/>
+  <path d="M80 96h32v32h16V96h32V80H128V48H112v32H80v16z" fill="white"/>
+  <text x="96" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="white" font-weight="bold">Создать</text>
+</svg>

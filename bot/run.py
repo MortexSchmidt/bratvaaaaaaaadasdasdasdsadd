@@ -48,7 +48,7 @@ async def main():
     dp.include_router(rp.router)  # Register RP router
     dp.include_router(ai.router)  # Register AI router
     dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
-    dp.include_router(truth_or_dare.router)  # Register Truth or Dare router
+    dp.include_router(truth_or_dare.router) # Register Truth or Dare router
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
@@ -114,7 +114,8 @@ async def main():
     print("Запуск бота...")
     await setup_commands()
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    # Используем polling в режиме, подходящем для многопоточной среды
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
     asyncio.run(main())

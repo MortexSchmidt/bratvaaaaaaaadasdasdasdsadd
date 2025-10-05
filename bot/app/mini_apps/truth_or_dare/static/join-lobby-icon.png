@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="192" height="192" viewBox="0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" fill="#f72585"/>
+  <circle cx="96" cy="96" r="56" fill="#4361ee" opacity="0.9"/>
+  <path d="M76 76h60v16H92v20h44v16H92v20H76V76z" fill="white"/>
+  <text x="96" y="150" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="white" font-weight="bold">Войти</text>
+</svg>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Правда или Действие</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Правда или Действие</h1>
+            <div class="theme-toggle" onclick="toggleTheme()">
+                <span id="theme-icon">🌙</span>
+            </div>
+        </header>
+        
+        <main>
+            <div id="welcome-screen" class="screen active">
+                <div class="logo">
+                    <div class="dice">🎲</div>
+                </div>
+                <h2>Добро пожаловать!</h2>
+                <p>Создайте лобби или присоединитесь к существующему, чтобы начать игру.</p>
+                <div class="actions">
+                    <button class="primary-btn" onclick="showCreateLobby()">Создать лобби</button>
+                    <button class="secondary-btn" onclick="showJoinLobby()">Присоединиться</button>
+                </div>
+            </div>
+            
+            <div id="create-lobby-screen" class="screen">
+                <h2>Создание лобби</h2>
+                <div class="form-group">
+                    <label for="player-name">Ваше имя:</label>
+                    <input type="text" id="player-name" placeholder="Введите ваше имя">
+                </div>
+                <div class="form-group">
+                    <label>Режим игры:</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="game-mode" value="clockwise" checked>
+                            <span class="checkmark"></span>
+                            По часовой стрелке
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="game-mode" value="anyone">
+                            <span class="checkmark"></span>
+                            Кому угодно
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Правила:</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="rules-mode" value="with" checked>
+                            <span class="checkmark"></span>
+                            С правилами
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="rules-mode" value="without">
+                            <span class="checkmark"></span>
+                            Без правил
+                        </label>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="primary-btn" onclick="createLobby()">Создать</button>
+                    <button class="secondary-btn" onclick="showWelcome()">Назад</button>
+                </div>
+            </div>
+            
+            <div id="join-lobby-screen" class="screen">
+                <h2>Присоединение к лобби</h2>
+                <div class="form-group">
+                    <label for="join-player-name">Ваше имя:</label>
+                    <input type="text" id="join-player-name" placeholder="Введите ваше имя">
+                </div>
+                <div class="form-group">
+                    <label for="lobby-code">Код лобби:</label>
+                    <input type="text" id="lobby-code" placeholder="Введите код лобби">
+                </div>
+                <div class="actions">
+                    <button class="primary-btn" onclick="joinLobby()">Присоединиться</button>
+                    <button class="secondary-btn" onclick="showWelcome()">Назад</button>
+                </div>
+            </div>
+            
+            <div id="lobby-screen" class="screen">
+                <div class="lobby-header">
+                    <h2>Лобби</h2>
+                    <div class="lobby-info">
+                        <span id="lobby-code-display">Код: ABC123</span>
+                        <span id="player-count">Игроков: 1/8</span>
+                    </div>
+                </div>
+                <div class="players-list">
+                    <div class="player-item host">
+                        <span class="player-name">Вы (Создатель)</span>
+                        <span class="host-badge">👑</span>
+                    </div>
+                    <div class="player-item" style="display: none;">
+                        <span class="player-name">Игрок 2</span>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="primary-btn" id="start-game-btn" onclick="startGame()" disabled>Начать игру</button>
+                    <button class="secondary-btn" onclick="copyLobbyCode()">Копировать код</button>
+                </div>
+            </div>
+            
+            <div id="game-screen" class="screen">
+                <div class="game-header">
+                    <h2>Игра</h2>
+                    <div class="game-info">
+                        <span id="current-player">Ход: Игрок 1</span>
+                        <span id="game-mode">Режим: По часовой</span>
+                    </div>
+                <div class="game-content">
+                    <div class="question-card">
+                        <h3>Выберите задание:</h3>
+                        <div class="choices">
+                            <button class="choice-btn truth" onclick="selectChoice('truth')">
+                                <span class="icon">💡</span>
+                                <span class="label">Правда</span>
+                            </button>
+                            <button class="choice-btn dare" onclick="selectChoice('dare')">
+                                <span class="icon">🎭</span>
+                                <span class="label">Действие</span>
+                            </button>
+                            <button class="choice-btn random" onclick="selectChoice('random')">
+                                <span class="icon">🎲</span>
+                                <span class="label">Случайное</span>
+                            </button>
+                            <button class="choice-btn pass" onclick="selectChoice('pass')">
+                                <span class="icon">⏭️</span>
+                                <span class="label">Пас</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="players-grid">
+                    <div class="player-card active">
+                        <div class="player-avatar">👤</div>
+                        <div class="player-name">Игрок 1</div>
+                        <div class="player-status">Ход</div>
+                    </div>
+                    <div class="player-card">
+                        <div class="player-avatar">👤</div>
+                        <div class="player-name">Игрок 2</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <div id="notification" class="notification">
+            <span id="notification-text"></span>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
