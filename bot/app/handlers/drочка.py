@@ -571,7 +571,7 @@ async def cmd_profile(message: Message):
         f"Монеты: {coins}\n"
         f"Streak: {streak} (max {max_streak})\n"
         f"Дрочков всего: {ud.get('total_drочка',0)}\n"
-        f"Pet: {pet}\n"
+    f"Дрочик: {pet}\n"
         f"TicTacToe: {ttt_w}W/{ttt_l}L | ELO {elo}\n"
         f"Статус: {status}{recovery_info}"
     )
@@ -716,7 +716,7 @@ async def cmd_drочка_stats(message: Message):
     
     await message.answer(response)
 
-@router.message(Command(commands=["дрочик_имя","drochka_name","set_drochka_name"]))
+@router.message(Command(commands=["дрочик_имя","drochka_name","set_drochka_name","питомец"]))
 async def cmd_set_pet_name(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
@@ -743,7 +743,7 @@ async def cmd_set_pet_name(message: Message):
     save_user_data(user_id, username, user['last_drочка'], user['total_drочка'], user['current_streak'], user['max_streak'], user['pet_name'])
     await message.answer(f"Имя дрочика установлено: {pet_name}")
 
-@router.message(Command(commands=["drochka_top","drochka_leaders","дрочка_топ"]))
+@router.message(Command(commands=["drochka_top","drochka_leaders","дрочка_топ","лидеры"]))
 async def cmd_drochka_top(message: Message):
     init_db()
     conn = sqlite3.connect(DB_FILE)
@@ -759,7 +759,7 @@ async def cmd_drochka_top(message: Message):
         lines.append(f"{i}. {uname} — {cur_st}🔥 (макс {max_st}, всего {total})")
     await message.answer("\n".join(lines))
 
-@router.message(Command(commands=["drochka_achievements","дрочка_ачивки"]))
+@router.message(Command(commands=["drochka_achievements","дрочка_ачивки","ачивки"]))
 async def cmd_drochka_achievements(message: Message):
     user_id = str(message.from_user.id)
     init_db()

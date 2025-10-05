@@ -62,16 +62,21 @@ async def main():
         await message.answer(f"Рассылка завершена: {stats}")
 
     async def apply_commands():
-        # Удаляем (ставим пустой список) и заново задаём чтобы клиенты обновили кэш
+        # Сначала чистим, затем ставим новый набор
         try:
             await bot.set_my_commands([], scope=BotCommandScopeDefault())
             await bot.set_my_commands([], scope=BotCommandScopeAllPrivateChats())
             await bot.set_my_commands([], scope=BotCommandScopeAllGroupChats())
         except Exception:
-            pass
+            pass  # очистка не критична
+        # Устанавливаем актуальный список
+        try:
             await bot.set_my_commands(BASE_COMMANDS, scope=BotCommandScopeDefault())
-            await bot.set_my_commands([cmd for cmd in BASE_COMMANDS], scope=BotCommandScopeAllPrivateChats())
+            await bot.set_my_commands(BASE_COMMANDS, scope=BotCommandScopeAllPrivateChats())
             await bot.set_my_commands(BASE_COMMANDS, scope=BotCommandScopeAllGroupChats())
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning("Не удалось установить команды")
 
     @dp.message(Command(commands=["refresh_commands"]))
     async def cmd_refresh_commands(message: Message):
@@ -81,17 +86,29 @@ async def main():
         await message.answer("Команды обновлены (очищено и перезаписано). Если не видно — закрой и заново открой меню / в Telegram.")
 
     BASE_COMMANDS = [
-           BotCommand(command="start", description="Запуск бота"),
-        BotCommand(command="help", description="Справка с разделами"),
-           BotCommand(command="дрочка", description="Совершить действие (раз в день)"),
-           BotCommand(command="питомец", description="Задать имя питомцу"),
-           BotCommand(command="лидеры", description="Топ по дрочке"),
-           BotCommand(command="ачивки", description="Мои ачивки"),
-           BotCommand(command="profile", description="Профиль"),
-           BotCommand(command="set_status", description="Установить статус профиля"),
-           BotCommand(command="truth", description="Правда или действие"),
-           BotCommand(command="tod", description="Правда или действие (альт)"),
-           BotCommand(command="refresh_commands", description="Обновить меню команд"),
+        BotCommand(command="start", description="Запуск бота"),
+        BotCommand(command="help", description="Справка"),
+        BotCommand(command="profile", description="Профиль"),
+        BotCommand(command="дрочка", description="Ежедневка"),
+        BotCommand(command="daily", description="Ежедневный квест"),
+        BotCommand(command="week", description="Прогресс недели"),
+        BotCommand(command="recover", description="Восстановить стрик"),
+        BotCommand(command="лидеры", description="Топ по стрику"),
+        BotCommand(command="ачивки", description="Мои ачивки"),
+        BotCommand(command="top_elo", description="Топ ELO"),
+        BotCommand(command="top_level", description="Топ уровней"),
+        BotCommand(command="shop", description="Магазин"),
+        BotCommand(command="buy", description="Купить товар"),
+        BotCommand(command="titles", description="Мои титулы"),
+        BotCommand(command="equip", description="Надеть титул"),
+        BotCommand(command="питомец", description="Имя питомца"),
+        BotCommand(command="set_status", description="Статус профиля"),
+        BotCommand(command="notify_on", description="Вкл. напоминания"),
+        BotCommand(command="notify_off", description="Выкл. напоминания"),
+        BotCommand(command="truth", description="Правда или действие"),
+        BotCommand(command="tod", description="Правда/Действие (alt)"),
+        BotCommand(command="tictactoe", description="Крестики-нолики"),
+        BotCommand(command="refresh_commands", description="Обновить меню"),
     ]
 
     async def setup_commands():
