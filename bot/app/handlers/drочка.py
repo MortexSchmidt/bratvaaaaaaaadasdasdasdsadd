@@ -113,6 +113,35 @@ def init_db():
             PRIMARY KEY (user_id, code)
         )
     ''')
+    # Таблица владения титулами
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_titles (
+            user_id TEXT,
+            code TEXT,
+            earned_at TEXT,
+            PRIMARY KEY(user_id, code)
+        )
+    ''')
+    # Таблица пользовательских настроек
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_prefs (
+            user_id TEXT PRIMARY KEY,
+            notify_daily INTEGER DEFAULT 1,
+            notify_weekly INTEGER DEFAULT 1,
+            notify_recover INTEGER DEFAULT 1,
+            last_daily_notify TEXT
+        )
+    ''')
+    # События (аудит)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            type TEXT,
+            meta TEXT,
+            ts TEXT
+        )
+    ''')
     # Daily quests table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS daily_quests (
@@ -174,7 +203,8 @@ def load_data() -> Dict:
             "last_broken_streak": last_broken_streak or 0,
             "recovery_available": recovery_available or 0,
             "recovery_stored": recovery_stored or 0,
-            "recovery_expires": recovery_expires
+            "recovery_expires": recovery_expires,
+            "active_title": None
         }
     return data
 
@@ -222,6 +252,7 @@ def get_or_init_user(user_id: str, username: str) -> dict:
             "recovery_stored": 0,
             "recovery_expires": None
         }
+    # ensure active_title column (lazy add) — stored in user_titles ownership; active stored in profile_status extension or separate table (simplified: embed into profile_status if startswith [title])
     return data[user_id]
 
 def persist_user(user_id: str, ud: dict):
@@ -287,6 +318,69 @@ ACHIEVEMENTS = {
     'total_1000': '🚀 1000 общих действий! Космос.',
     'total_5000': '🌌 5000 тотал! Ты машина.'
 }
+
+# Маппинг ачивка -> титул
+ACHIEVEMENT_TITLES = {
+    'streak_10': 'Упорный',
+    'streak_30': 'Легенда',
+    'streak_50': 'Полсотни',
+    'streak_100': 'Железный',
+    'streak_365': 'Вечный',
+    'total_1000': 'Тысячер',
+    'total_5000': 'ПятиТысячер'
+}
+
+SHOP_ITEMS = {
+    'title_flame': { 'type': 'title', 'name': '🔥 Пламенный', 'cost': 25 },
+    'title_shadow': { 'type': 'title', 'name': '🌑 Теневой', 'cost': 40 },
+    'title_luck': { 'type': 'title', 'name': '🍀 Везучий', 'cost': 55 },
+    'freeze_token': { 'type': 'consumable', 'name': '🧊 Заморозка (1 защита серии)', 'cost': 80 }
+}
+
+def log_event(user_id: str, etype: str, meta: dict | None = None):
+    try:
+        init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+        cur.execute('INSERT INTO events(user_id,type,meta,ts) VALUES (?,?,?,?)', (user_id, etype, json_dumps(meta or {}), datetime.utcnow().isoformat()))
+        conn.commit(); conn.close()
+    except Exception:
+        pass
+
+def json_dumps(obj):
+    import json
+    try:
+        return json.dumps(obj, ensure_ascii=False)
+    except Exception:
+        return '{}'
+
+def grant_title(user_id: str, title: str):
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('INSERT OR IGNORE INTO user_titles(user_id, code, earned_at) VALUES (?,?,?)', (user_id, title, datetime.utcnow().isoformat()))
+    conn.commit(); conn.close()
+
+def list_titles(user_id: str):
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('SELECT code FROM user_titles WHERE user_id=? ORDER BY earned_at', (user_id,))
+    rows=[r[0] for r in cur.fetchall()]; conn.close(); return rows
+
+def equip_title(user_id: str, title: str):
+    titles = list_titles(user_id)
+    if title not in titles:
+        return False
+    # store inside profile_status prefix if not already
+    data = load_data(); ud = data.get(user_id)
+    if not ud: return False
+    base_status = ud.get('profile_status') or ''
+    # remove existing [..] prefix
+    import re
+    base_status_clean = re.sub(r'^\[[^\]]+\]\s*', '', base_status)
+    new_status = f"[{title}] {base_status_clean}".strip()
+    ud['profile_status'] = new_status
+    persist_user(user_id, ud)
+    log_event(user_id, 'equip_title', {'title': title})
+    return True
+
+def user_has_title(user_id: str, title: str) -> bool:
+    return title in list_titles(user_id)
 
 WEEKLY_GOAL = 200  # целевое количество действий на неделю
 
@@ -403,6 +497,14 @@ async def perform_drочка(message: Message):
                         await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
                     except Exception:
                         pass
+                    # титул за ачивку
+                    t = ACHIEVEMENT_TITLES.get(code)
+                    if t:
+                        grant_title(user_id, t)
+                        try:
+                            await message.bot.send_message(message.from_user.id, f"🎖 Получен титул: {t}")
+                        except Exception:
+                            pass
         # Total achievements
         for ttot in (1000,5000):
             if user_data['total_drочка'] == ttot:
@@ -412,6 +514,12 @@ async def perform_drочка(message: Message):
                         await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
                     except Exception:
                         pass
+                    t = ACHIEVEMENT_TITLES.get(code)
+                    if t:
+                        grant_title(user_id, t)
+                        try:
+                            await message.bot.send_message(message.from_user.id, f"🎖 Получен титул: {t}")
+                        except Exception: pass
     else:
         # Уже сегодня — показываем время до локальной полуночи
         delta = next_midnight_delta()
@@ -468,6 +576,97 @@ async def cmd_profile(message: Message):
         f"Статус: {status}{recovery_info}"
     )
     await message.answer(response)
+
+@router.message(Command(commands=["top_elo"]))
+async def cmd_top_elo(message: Message):
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('SELECT username, elo_ttt, ttt_wins, ttt_losses FROM user_stats WHERE elo_ttt IS NOT NULL ORDER BY elo_ttt DESC LIMIT 10')
+    rows=cur.fetchall(); conn.close()
+    if not rows:
+        return await message.answer('Пока нет рейтинга.')
+    lines=['🏆 <b>TOP ELO</b>']
+    for i,(username, elo, w, l) in enumerate(rows, start=1):
+        uname = username or '—'
+        lines.append(f"{i}. {uname} — {elo} ({w}W/{l}L)")
+    await message.answer('\n'.join(lines), parse_mode='HTML')
+
+@router.message(Command(commands=["top_level","top_xp"]))
+async def cmd_top_level(message: Message):
+    init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('SELECT username, xp FROM user_stats ORDER BY xp DESC LIMIT 10')
+    rows=cur.fetchall(); conn.close()
+    if not rows:
+        return await message.answer('Нет данных уровней.')
+    lines=['🌟 <b>TOP Уровней</b>']
+    for i,(username, xp) in enumerate(rows, start=1):
+        lvl = int(math.sqrt((xp or 0)/10)) if xp else 0
+        lines.append(f"{i}. {username or '—'} — LVL {lvl} ({xp} XP)")
+    await message.answer('\n'.join(lines), parse_mode='HTML')
+
+@router.message(Command(commands=["shop","магазин"]))
+async def cmd_shop(message: Message):
+    text = ['🛒 <b>Магазин</b>']
+    for code,item in SHOP_ITEMS.items():
+        text.append(f"• {item['name']} — {item['cost']} монет (/buy {code})")
+    await message.answer('\n'.join(text), parse_mode='HTML')
+
+@router.message(Command(commands=["buy"]))
+async def cmd_buy(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts)<2:
+        return await message.answer('Использование: /buy <код>')
+    code = parts[1].strip()
+    if code not in SHOP_ITEMS:
+        return await message.answer('Нет такого товара.')
+    item = SHOP_ITEMS[code]
+    uid = str(message.from_user.id)
+    data = load_data(); ud=data.get(uid) or get_or_init_user(uid, message.from_user.username or '—')
+    if ud.get('coins',0) < item['cost']:
+        return await message.answer('Недостаточно монет.')
+    # deduct
+    ud['coins'] -= item['cost']
+    persist_user(uid, ud)
+    if item['type']=='title':
+        grant_title(uid, item['name'])
+        await message.answer(f"Получен титул: {item['name']}! /titles чтобы посмотреть.")
+    elif item['type']=='consumable':
+        # simplistic: store as title-like with prefix 'ITEM:'
+        grant_title(uid, f"ITEM:{code}")
+        await message.answer(f"Получен предмет: {item['name']} (хранится). Пока без применения.")
+    log_event(uid, 'buy', {'code': code})
+
+@router.message(Command(commands=["titles","титулы"]))
+async def cmd_titles(message: Message):
+    uid = str(message.from_user.id)
+    titles = [t for t in list_titles(uid) if not t.startswith('ITEM:')]
+    if not titles:
+        return await message.answer('Нет титулов. Получай ачивки или покупай в /shop.')
+    await message.answer('Твои титулы:\n' + '\n'.join(f"• {t}" for t in titles))
+
+@router.message(Command(commands=["equip"]))
+async def cmd_equip(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts)<2:
+        return await message.answer('Использование: /equip <точноеНазваниеТитула>')
+    title = parts[1].strip()
+    uid = str(message.from_user.id)
+    if equip_title(uid, title):
+        return await message.answer(f"Активирован титул: {title}")
+    await message.answer('Нет такого титула или не получен.')
+
+@router.message(Command(commands=["notify_on"]))
+async def cmd_notify_on(message: Message):
+    uid=str(message.from_user.id); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('INSERT OR IGNORE INTO user_prefs(user_id) VALUES (?)',(uid,))
+    cur.execute('UPDATE user_prefs SET notify_daily=1 WHERE user_id=?',(uid,)); conn.commit(); conn.close()
+    await message.answer('Ежедневные напоминания включены.')
+
+@router.message(Command(commands=["notify_off"]))
+async def cmd_notify_off(message: Message):
+    uid=str(message.from_user.id); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor()
+    cur.execute('INSERT OR IGNORE INTO user_prefs(user_id) VALUES (?)',(uid,))
+    cur.execute('UPDATE user_prefs SET notify_daily=0 WHERE user_id=?',(uid,)); conn.commit(); conn.close()
+    await message.answer('Ежедневные напоминания отключены.')
 
 @router.message(Command(commands=["set_status","статус"]))
 async def cmd_set_status(message: Message):
