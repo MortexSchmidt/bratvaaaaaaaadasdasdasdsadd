@@ -53,7 +53,10 @@ class TruthOrDareGame:
         self.rules_mode = rules_mode  # with_rules | no_rules
         self.current_index = 0
         self.passes_used = {pid:0 for pid in players}
-        self.phase = "waiting_action"  # waiting_action | select_target | task_active
+        # Фазы:
+        # ANYONE: waiting_action -> select_target -> task_active
+        # CLOCKWISE: waiting_choice -> awaiting_content -> task_active
+        self.phase = "waiting_choice" if mode == MODE_CLOCKWISE else "waiting_action"
         self.current_task: str | None = None
         self.current_task_type: str | None = None
         self.target_player_id: int | None = None
@@ -99,6 +102,16 @@ def next_keyboard(game: TruthOrDareGame):
 
 def waiting_task_keyboard():
     kb=InlineKeyboardBuilder(); kb.button(text="Задание выполнено", callback_data="tod:done")
+    return kb
+
+def target_choice_keyboard(game: TruthOrDareGame, target_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Правда", callback_data="tod:choice:truth")
+    kb.button(text="Действие", callback_data="tod:choice:dare")
+    kb.button(text="Random", callback_data="tod:choice:random")
+    if game.pass_available(target_id):
+        kb.button(text="Пас", callback_data="tod:choice:pass")
+    kb.adjust(3,1,1)
     return kb
 
 def mention_name(uid:int, name:str): return f"<a href='tg://user?id={uid}'>{name}</a>"
@@ -178,12 +191,23 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
             active_games[chat_id]=game; del lobbies[chat_id]
             mode_txt = "По кругу ⏱" if game.mode==MODE_CLOCKWISE else "Кому угодно 🎯"
             rules_txt = "1 пас (осторожно)" if game.rules_mode==RULES_WITH else "Неограниченные пасы"
-            await cb.message.edit_text(
-                f"🚀 <b>Игра началась!</b>\n\n" \
-                f"Режим: <b>{mode_txt}</b>\n" \
-                f"Правила: <b>{rules_txt}</b>\n" \
-                f"Ход: {mention_name(game.current_player_id(), game.current_player_name())}\nВыбирай действие.",
-                parse_mode="HTML", reply_markup=action_keyboard(game).as_markup())
+            if game.mode == MODE_CLOCKWISE:
+                target = game.players[(game.current_index+1)%len(game.players)]
+                await cb.message.edit_text(
+                    f"🚀 <b>Игра началась!</b>\n\n" \
+                    f"Режим: <b>{mode_txt}</b>\n" \
+                    f"Правила: <b>{rules_txt}</b>\n" \
+                    f"Текущий спрашивающий: {mention_name(game.current_player_id(), game.current_player_name())}\n" \
+                    f"🎯 {mention_name(target, game.player_names[target])}, выбери: Правда / Действие / Random / Пас",
+                    parse_mode="HTML",
+                    reply_markup=target_choice_keyboard(game, target).as_markup())
+            else:
+                await cb.message.edit_text(
+                    f"🚀 <b>Игра началась!</b>\n\n" \
+                    f"Режим: <b>{mode_txt}</b>\n" \
+                    f"Правила: <b>{rules_txt}</b>\n" \
+                    f"Ход: {mention_name(game.current_player_id(), game.current_player_name())}\nВыбирай действие.",
+                    parse_mode="HTML", reply_markup=action_keyboard(game).as_markup())
             await cb.answer()
         elif sub=="cancel":
             if user_id!=lobby['creator']: return await cb.answer("Только создатель")
@@ -191,96 +215,102 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
         return
     # action
     if parts[1]=="act":
+        # Используется только в режиме ANYONE (свободный выбор цели)
         if chat_id not in active_games: return await cb.answer("Игры нет", show_alert=True)
         game=active_games[chat_id]
+        if game.mode != MODE_ANYONE: return await cb.answer("Сейчас другой режим")
         if user_id!=game.current_player_id(): return await cb.answer("Не твой ход")
-        action=parts[2]
+        action = parts[2]
         if action=="end":
             if user_id!=game.creator_id: return await cb.answer("Только создатель")
-            del active_games[chat_id]; await cb.message.edit_text("Игра завершена."); return await cb.answer()
+            del active_games[chat_id]
+            await cb.message.edit_text("Игра завершена.")
+            return await cb.answer()
         if action=="pass":
             if not game.pass_available(user_id): return await cb.answer("Пас уже использован")
-            game.use_pass(user_id); game.next_player()
-            await cb.message.edit_text(f"⏭ Пас! Ход: {mention_name(game.current_player_id(), game.current_player_name())}", parse_mode="HTML", reply_markup=action_keyboard(game).as_markup()); return await cb.answer("Пропущено")
+            game.use_pass(user_id)
+            game.next_player()
+            await cb.message.edit_text(
+                f"⏭ Пас! Ход: {mention_name(game.current_player_id(), game.current_player_name())}",
+                parse_mode="HTML",
+                reply_markup=action_keyboard(game).as_markup())
+            return await cb.answer("Пропущено")
         if action in {"truth","dare","random"}:
-            if action=="random": action=random.choice(["truth","dare"])
-            game.current_task_type=action
-            # CLOCKWISE: секретный ввод / авто случайное
-            if game.mode==MODE_CLOCKWISE:
-                target = game.players[(game.current_index+1)%len(game.players)]
-                game.target_player_id = target
-                if action == "random":
-                    # уже преобразовано в truth/dare выше
-                    game.current_task = random_truth() if game.current_task_type=="truth" else random_dare()
-                    game.phase="task_active"
-                    await cb.message.edit_text(
-                        f"🎲 Случайное задание отправлено {mention_name(target, game.player_names[target])} в личку (если бот не может написать — пусть нажмёт /start в ЛС).\n\nОжидаем выполнения…",
-                        parse_mode="HTML"
-                    )
-                    # попытка отправить приватно
-                    try:
-                        await cb.bot.send_message(target,
-                            f"🤫 Вам пришло <b>{'Правда' if game.current_task_type=='truth' else 'Действие'}</b> (случайное):\n\n{game.current_task}\n\nКогда выполните — вернитесь в чат и нажмите 'Задание выполнено'.",
-                            parse_mode="HTML")
-                        await cb.bot.send_message(game.chat_id,
-                            f"📨 {mention_name(target, game.player_names[target])} получил(а) секретное задание!",
-                            parse_mode="HTML")
-                    except Exception:
-                        await cb.bot.send_message(game.chat_id,
-                            f"⚠️ Не удалось отправить ЛС {mention_name(target, game.player_names[target])}. Он/она должен(а) написать боту /start в ЛС.",
-                            parse_mode="HTML")
-                    # показать кнопки ожидания
-                    await cb.message.answer(
-                        f"⏳ Ждём {mention_name(target, game.player_names[target])}…",
-                        parse_mode="HTML",
-                        reply_markup=waiting_task_keyboard().as_markup()
-                    )
-                    return await cb.answer()
-                else:
-                    # попросить текущего игрока в ЛС ввести содержимое
-                    game.phase = "awaiting_content"
-                    waiting_for_input[user_id] = {
-                        "type": game.current_task_type,
-                        "target": target,
-                        "chat_id": chat_id
-                    }
-                    await cb.answer("Жду текст в ЛС")
-                    try:
-                        await cb.bot.send_message(user_id,
-                            f"✍️ Введи {'вопрос (Правда)' if action=='truth' else 'задание (Действие)'} для игрока {game.player_names[target]}\n\nОтправь одним сообщением.")
-                    except Exception:
-                        await cb.message.answer("⚠️ Напиши боту в ЛС /start чтобы я мог принять текст.")
-                    await cb.message.edit_text(
-                        f"🕵️ {mention_name(user_id, game.player_names[user_id])} пишет секретное задание для {mention_name(target, game.player_names[target])}…",
-                        parse_mode="HTML"
-                    )
-                    return
-            # ANYONE: сначала выбор цели
-            if game.mode==MODE_ANYONE:
-                game.phase="select_target"
-                # строим клавиатуру игроков
-                kb=InlineKeyboardBuilder()
-                for pid in game.players:
-                    if pid==user_id: continue
-                    kb.button(text=game.player_names[pid], callback_data=f"tod:target:{pid}")
-                kb.button(text="Отмена", callback_data="tod:act:cancel")
-                kb.adjust(2)
-                label = "Правда" if action=="truth" else "Действие"
-                await cb.message.edit_text(
-                    f"🎯 Выберите цель для: <b>{label}</b>\n",
-                    parse_mode="HTML", reply_markup=kb.as_markup())
-                return await cb.answer()
-            # CLOCKWISE — цель следующий игрок
-            target = game.players[(game.current_index+1)%len(game.players)]
-            game.target_player_id = target
-            game.current_task = random_truth() if action=="truth" else random_dare()
-            game.phase="task_active"
+            if action=="random":
+                action = random.choice(["truth","dare"])
+            game.current_task_type = action
+            # выбор цели
+            game.phase = "select_target"
+            kb=InlineKeyboardBuilder()
+            for pid in game.players:
+                if pid==user_id: continue
+                kb.button(text=game.player_names[pid], callback_data=f"tod:target:{pid}")
+            kb.button(text="Отмена", callback_data="tod:act:cancel")
+            kb.adjust(2)
             label = "Правда" if action=="truth" else "Действие"
             await cb.message.edit_text(
-                f"🎲 <b>{label}</b> для {mention_name(target, game.player_names[target])}:\n\n<i>{game.current_task}</i>\n\nПосле выполнения нажмите 'Далее'.",
-                parse_mode="HTML", reply_markup=next_keyboard(game).as_markup())
+                f"🎯 Выберите цель для: <b>{label}</b>",
+                parse_mode="HTML",
+                reply_markup=kb.as_markup())
+            return await cb.answer()
+        if action=="cancel":
+            # возврат к выбору действия
+            game.phase = "waiting_action"
+            await cb.message.edit_text(
+                f"Ход: {mention_name(game.current_player_id(), game.current_player_name())}",
+                parse_mode="HTML",
+                reply_markup=action_keyboard(game).as_markup())
             return await cb.answer()
         return
+
+    # CLOCKWISE: цель (target) выбирает тип задания
+    if parts[1]=="choice":
+        if chat_id not in active_games: return await cb.answer()
+        game=active_games[chat_id]
+        if game.mode != MODE_CLOCKWISE: return await cb.answer()
+        target_expected = game.players[(game.current_index+1)%len(game.players)]
+        if user_id != target_expected: return await cb.answer("Не ты выбираешь")
+        if game.phase not in {"waiting_choice"}: return await cb.answer()
+        choice = parts[2]
+        # пас
+        if choice=="pass":
+            if not game.pass_available(user_id): return await cb.answer("Пас исчерпан")
+            game.use_pass(user_id)
+            # цель становится спрашивающим
+            game.current_index = game.players.index(user_id)
+            game.phase = "waiting_choice"
+            nxt_target = game.players[(game.current_index+1)%len(game.players)]
+            await cb.message.edit_text(
+                f"⏭ {mention_name(user_id, game.player_names[user_id])} сделал(а) пас.\nТеперь спрашивает: {mention_name(game.current_player_id(), game.current_player_name())}\n\n🎯 {mention_name(nxt_target, game.player_names[nxt_target])}, выбери: Правда / Действие / Random / Пас",
+                parse_mode="HTML",
+                reply_markup=target_choice_keyboard(game, nxt_target).as_markup())
+            return await cb.answer("Пас")
+        if choice not in {"truth","dare","random"}: return await cb.answer()
+        picked_type = choice
+        if picked_type == "random":
+            picked_type = random.choice(["truth","dare"])
+        game.current_task_type = picked_type
+        asker_id = game.current_player_id()
+        # random в смысле цель нажала random -> уже выбран picked_type, но контент ещё не известен: генерируем сразу
+        # Генерация и отправка приватно цели
+        game.current_task = random_truth() if picked_type=="truth" else random_dare()
+        game.target_player_id = user_id
+        game.phase = "task_active"
+        try:
+            await cb.bot.send_message(user_id,
+                f"🤫 Твоё секретное <b>{'Правда' if picked_type=='truth' else 'Действие'}</b>:\n\n{game.current_task}\n\nКогда выполнишь — вернись и нажми 'Задание выполнено'.",
+                parse_mode='HTML')
+        except Exception:
+            await cb.message.answer(
+                f"⚠️ Не могу написать {mention_name(user_id, game.player_names[user_id])} — /start в ЛС.",
+                parse_mode='HTML')
+        await cb.message.edit_text(
+            f"🎲 {'Правда' if picked_type=='truth' else 'Действие'} выдано {mention_name(user_id, game.player_names[user_id])}.\n⏳ Ждём выполнения…",
+            parse_mode='HTML',
+            reply_markup=waiting_task_keyboard().as_markup())
+        return await cb.answer()
+
+    # выбор типа ANYONE режима -> выбор цели обрабатывается ниже в parts[1]=="target"
     # выбор цели в режиме ANYONE
     if parts[1]=="target":
         if chat_id not in active_games: return await cb.answer()
@@ -300,31 +330,45 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
             f"🎲 <b>{label}</b> для {mention_name(target_id, game.player_names[target_id])}:\n\n<i>{game.current_task}</i>\n\nПосле выполнения нажмите 'Далее'.",
             parse_mode="HTML", reply_markup=next_keyboard(game).as_markup())
         return await cb.answer()
-    if parts[1]=="next":
+    if parts[1]=="next":  # оставлено для совместимости (ANYONE)
         if chat_id not in active_games: return await cb.answer()
         game=active_games[chat_id]
+        if game.mode != MODE_ANYONE: return await cb.answer()
         if user_id!=game.current_player_id(): return await cb.answer("Не ты выполнял")
         if game.phase!="task_active": return await cb.answer()
-        # после выполнения: ход получает тот, кто был целью (и только потом двигается на следующем раунде)
+        # после выполнения: ход получает тот, кто был целью
         if game.target_player_id and game.target_player_id in game.players:
             game.current_index = game.players.index(game.target_player_id)
-        # сброс состояния без продвижения дальше
         game.phase = "waiting_action"
         game.current_task = None
         game.current_task_type = None
         game.target_player_id = None
-        await cb.message.edit_text(f"✅ Задание завершено! Теперь ход: {mention_name(game.current_player_id(), game.current_player_name())}", parse_mode="HTML", reply_markup=action_keyboard(game).as_markup()); return await cb.answer()
+        await cb.message.edit_text(
+            f"✅ Задание завершено! Теперь ход: {mention_name(game.current_player_id(), game.current_player_name())}",
+            parse_mode="HTML",
+            reply_markup=action_keyboard(game).as_markup())
+        return await cb.answer()
     if parts[1]=="done":
         if chat_id not in active_games: return await cb.answer()
         game=active_games[chat_id]
         # кнопку 'Задание выполнено' должен жать цель
         if game.target_player_id != user_id: return await cb.answer("Не ты цель")
         if game.phase!="task_active": return await cb.answer()
-        # аналогично next
+        # цель становится новым спрашивающим
         game.current_index = game.players.index(user_id)
-        game.phase = "waiting_action"
+        game.phase = "waiting_choice" if game.mode==MODE_CLOCKWISE else "waiting_action"
         game.current_task=None; game.current_task_type=None; game.target_player_id=None
-        await cb.message.edit_text(f"✅ {mention_name(user_id, game.player_names[user_id])} выполнил(а) задание! Ход: {mention_name(game.current_player_id(), game.current_player_name())}", parse_mode="HTML", reply_markup=action_keyboard(game).as_markup())
+        if game.mode==MODE_CLOCKWISE:
+            nxt_target = game.players[(game.current_index+1)%len(game.players)]
+            await cb.message.edit_text(
+                f"✅ {mention_name(user_id, game.player_names[user_id])} выполнил(а) задание!\n\nТеперь спрашивающий: {mention_name(game.current_player_id(), game.current_player_name())}\n🎯 {mention_name(nxt_target, game.player_names[nxt_target])}, выбери: Правда / Действие / Random / Пас",
+                parse_mode='HTML',
+                reply_markup=target_choice_keyboard(game, nxt_target).as_markup()
+            )
+        else:
+            await cb.message.edit_text(
+                f"✅ {mention_name(user_id, game.player_names[user_id])} выполнил(а) задание! Ход: {mention_name(game.current_player_id(), game.current_player_name())}",
+                parse_mode='HTML', reply_markup=action_keyboard(game).as_markup())
         return await cb.answer("Готово")
     await cb.answer()
 
