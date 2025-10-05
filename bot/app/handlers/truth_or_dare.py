@@ -135,11 +135,23 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
         lobby=lobbies[chat_id]; sub=parts[2]
         if sub=="join":
             if user_id not in lobby['players']:
-                lobby['players'].append(user_id); lobby['player_names'][user_id]= cb.from_user.first_name or cb.from_user.username or "Игрок"; await cb.answer("Готово ✅")
-            else: await cb.answer("Вы уже в лобби")
+                lobby['players'].append(user_id)
+                lobby['player_names'][user_id]= cb.from_user.first_name or cb.from_user.username or "Игрок"
+                await cb.answer("Готово ✅")
+            else:
+                await cb.answer("Вы уже в лобби")
+            # ВАЖНО: групповое сообщение одно для всех, поэтому всегда показываем клавиатуру создателя,
+            # иначе при входе обычного игрока пропадают кнопки 'Старт' / 'Правила' / 'Режим'.
             try:
-                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(lobby['creator']==cb.from_user.id, lobby['mode'], lobby['rules']).as_markup(), parse_mode="HTML")
-            except Exception: pass
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=lobby['message_id'],
+                    text=render_lobby_text(lobby),
+                    reply_markup=lobby_keyboard(True, lobby['mode'], lobby['rules']).as_markup(),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
         elif sub=="mode":
             if user_id!=lobby['creator']: return await cb.answer("Только создатель")
             lobby['mode'] = MODE_ANYONE if lobby['mode']==MODE_CLOCKWISE else MODE_CLOCKWISE
