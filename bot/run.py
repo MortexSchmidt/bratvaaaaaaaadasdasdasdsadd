@@ -85,28 +85,30 @@ async def main():
         await apply_commands()
         await message.answer("Команды обновлены (очищено и перезаписано). Если не видно — закрой и заново открой меню / в Telegram.")
 
+    # Telegram Bot API: команда может содержать только латиницу/цифры/"_". Поэтому кириллицу убираем из меню,
+    # но оставляем обработчики с русскими алиасами.
     BASE_COMMANDS = [
         BotCommand(command="start", description="Запуск бота"),
         BotCommand(command="help", description="Справка"),
         BotCommand(command="profile", description="Профиль"),
-        BotCommand(command="дрочка", description="Ежедневка"),
+        BotCommand(command="drochka", description="Ежедневка"),
         BotCommand(command="daily", description="Ежедневный квест"),
         BotCommand(command="week", description="Прогресс недели"),
         BotCommand(command="recover", description="Восстановить стрик"),
-        BotCommand(command="лидеры", description="Топ по стрику"),
-        BotCommand(command="ачивки", description="Мои ачивки"),
+        BotCommand(command="leaders", description="Топ по стрику"),
+        BotCommand(command="achievements", description="Мои ачивки"),
         BotCommand(command="top_elo", description="Топ ELO"),
         BotCommand(command="top_level", description="Топ уровней"),
         BotCommand(command="shop", description="Магазин"),
-        BotCommand(command="buy", description="Купить товар"),
-        BotCommand(command="titles", description="Мои титулы"),
+        BotCommand(command="buy", description="Купить"),
+        BotCommand(command="titles", description="Титулы"),
         BotCommand(command="equip", description="Надеть титул"),
-        BotCommand(command="питомец", description="Имя питомца"),
+        BotCommand(command="pet", description="Имя питомца"),
         BotCommand(command="set_status", description="Статус профиля"),
         BotCommand(command="notify_on", description="Вкл. напоминания"),
         BotCommand(command="notify_off", description="Выкл. напоминания"),
         BotCommand(command="truth", description="Правда или действие"),
-        BotCommand(command="tod", description="Правда/Действие (alt)"),
+        BotCommand(command="tod", description="TOD альт"),
         BotCommand(command="tictactoe", description="Крестики-нолики"),
         BotCommand(command="refresh_commands", description="Обновить меню"),
     ]
