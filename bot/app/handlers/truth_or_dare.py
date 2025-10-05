@@ -71,6 +71,7 @@ class TruthOrDareGame:
 
 lobbies: Dict[int, dict] = {}
 active_games: Dict[int, TruthOrDareGame] = {}
+waiting_for_input: Dict[int, dict] = {}
 
 def lobby_keyboard(is_creator: bool, mode: str, rules: str):
     kb=InlineKeyboardBuilder(); kb.button(text="Присоединиться", callback_data="tod:lobby:join")
@@ -95,6 +96,10 @@ def next_keyboard(game: TruthOrDareGame):
     kb=InlineKeyboardBuilder(); kb.button(text="Далее ▶", callback_data="tod:next")
     if game.creator_id == game.current_player_id(): kb.button(text="Завершить", callback_data="tod:act:end")
     kb.adjust(2); return kb
+
+def waiting_task_keyboard():
+    kb=InlineKeyboardBuilder(); kb.button(text="Задание выполнено", callback_data="tod:done")
+    return kb
 
 def mention_name(uid:int, name:str): return f"<a href='tg://user?id={uid}'>{name}</a>"
 def render_lobby_text(lobby:dict):
@@ -200,7 +205,57 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
         if action in {"truth","dare","random"}:
             if action=="random": action=random.choice(["truth","dare"])
             game.current_task_type=action
-            # в режиме ANYONE сначала выбор цели
+            # CLOCKWISE: секретный ввод / авто случайное
+            if game.mode==MODE_CLOCKWISE:
+                target = game.players[(game.current_index+1)%len(game.players)]
+                game.target_player_id = target
+                if action == "random":
+                    # уже преобразовано в truth/dare выше
+                    game.current_task = random_truth() if game.current_task_type=="truth" else random_dare()
+                    game.phase="task_active"
+                    await cb.message.edit_text(
+                        f"🎲 Случайное задание отправлено {mention_name(target, game.player_names[target])} в личку (если бот не может написать — пусть нажмёт /start в ЛС).\n\nОжидаем выполнения…",
+                        parse_mode="HTML"
+                    )
+                    # попытка отправить приватно
+                    try:
+                        await cb.bot.send_message(target,
+                            f"🤫 Вам пришло <b>{'Правда' if game.current_task_type=='truth' else 'Действие'}</b> (случайное):\n\n{game.current_task}\n\nКогда выполните — вернитесь в чат и нажмите 'Задание выполнено'.",
+                            parse_mode="HTML")
+                        await cb.bot.send_message(game.chat_id,
+                            f"📨 {mention_name(target, game.player_names[target])} получил(а) секретное задание!",
+                            parse_mode="HTML")
+                    except Exception:
+                        await cb.bot.send_message(game.chat_id,
+                            f"⚠️ Не удалось отправить ЛС {mention_name(target, game.player_names[target])}. Он/она должен(а) написать боту /start в ЛС.",
+                            parse_mode="HTML")
+                    # показать кнопки ожидания
+                    await cb.message.answer(
+                        f"⏳ Ждём {mention_name(target, game.player_names[target])}…",
+                        parse_mode="HTML",
+                        reply_markup=waiting_task_keyboard().as_markup()
+                    )
+                    return await cb.answer()
+                else:
+                    # попросить текущего игрока в ЛС ввести содержимое
+                    game.phase = "awaiting_content"
+                    waiting_for_input[user_id] = {
+                        "type": game.current_task_type,
+                        "target": target,
+                        "chat_id": chat_id
+                    }
+                    await cb.answer("Жду текст в ЛС")
+                    try:
+                        await cb.bot.send_message(user_id,
+                            f"✍️ Введи {'вопрос (Правда)' if action=='truth' else 'задание (Действие)'} для игрока {game.player_names[target]}\n\nОтправь одним сообщением.")
+                    except Exception:
+                        await cb.message.answer("⚠️ Напиши боту в ЛС /start чтобы я мог принять текст.")
+                    await cb.message.edit_text(
+                        f"🕵️ {mention_name(user_id, game.player_names[user_id])} пишет секретное задание для {mention_name(target, game.player_names[target])}…",
+                        parse_mode="HTML"
+                    )
+                    return
+            # ANYONE: сначала выбор цели
             if game.mode==MODE_ANYONE:
                 game.phase="select_target"
                 # строим клавиатуру игроков
@@ -250,14 +305,68 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
         game=active_games[chat_id]
         if user_id!=game.current_player_id(): return await cb.answer("Не ты выполнял")
         if game.phase!="task_active": return await cb.answer()
-        # логика смены хода: CLOCKWISE — просто следующий; ANYONE — следующий после таргета или сам таргет?
-        if game.mode==MODE_ANYONE and game.target_player_id:
-            # целевой игрок получает следующий ход
-            if game.target_player_id in game.players:
-                game.current_index = game.players.index(game.target_player_id)
-        game.next_player()
+        # после выполнения: ход получает тот, кто был целью (и только потом двигается на следующем раунде)
+        if game.target_player_id and game.target_player_id in game.players:
+            game.current_index = game.players.index(game.target_player_id)
+        # сброс состояния без продвижения дальше
+        game.phase = "waiting_action"
+        game.current_task = None
+        game.current_task_type = None
+        game.target_player_id = None
         await cb.message.edit_text(f"✅ Задание завершено! Теперь ход: {mention_name(game.current_player_id(), game.current_player_name())}", parse_mode="HTML", reply_markup=action_keyboard(game).as_markup()); return await cb.answer()
+    if parts[1]=="done":
+        if chat_id not in active_games: return await cb.answer()
+        game=active_games[chat_id]
+        # кнопку 'Задание выполнено' должен жать цель
+        if game.target_player_id != user_id: return await cb.answer("Не ты цель")
+        if game.phase!="task_active": return await cb.answer()
+        # аналогично next
+        game.current_index = game.players.index(user_id)
+        game.phase = "waiting_action"
+        game.current_task=None; game.current_task_type=None; game.target_player_id=None
+        await cb.message.edit_text(f"✅ {mention_name(user_id, game.player_names[user_id])} выполнил(а) задание! Ход: {mention_name(game.current_player_id(), game.current_player_name())}", parse_mode="HTML", reply_markup=action_keyboard(game).as_markup())
+        return await cb.answer("Готово")
     await cb.answer()
+
+@router.message()
+async def private_task_input(message: Message, bot: Bot):
+    # Обрабатываем приватный ввод задания
+    if message.chat.type != 'private':
+        return
+    uid = message.from_user.id
+    if uid not in waiting_for_input:
+        return
+    info = waiting_for_input.pop(uid)
+    chat_id = info['chat_id']
+    if chat_id not in active_games:
+        return
+    game = active_games[chat_id]
+    # только если всё ещё его ход и ожидается контент
+    if game.current_player_id() != uid or game.phase != 'awaiting_content':
+        return
+    target = info['target']
+    game.target_player_id = target
+    game.current_task_type = info['type']
+    game.current_task = message.text.strip()
+    game.phase = 'task_active'
+    # отправка цели в ЛС
+    try:
+        await bot.send_message(target,
+            f"🤫 Вам пришло секретное <b>{'Правда' if game.current_task_type=='truth' else 'Действие'}</b>:\n\n{game.current_task}\n\nКогда выполните — вернитесь в чат и нажмите 'Задание выполнено'.",
+            parse_mode='HTML')
+    except Exception:
+        await bot.send_message(chat_id,
+            f"⚠️ Не удалось отправить ЛС {mention_name(target, game.player_names[target])}. Он/она должен(а) написать боту /start в ЛС.",
+            parse_mode='HTML')
+    # уведомление в чате
+    await bot.send_message(chat_id,
+        f"📨 {mention_name(target, game.player_names[target])} получил(а) секретное задание!",
+        parse_mode='HTML')
+    await bot.send_message(chat_id,
+        f"⏳ Ждём {mention_name(target, game.player_names[target])}…",
+        parse_mode='HTML', reply_markup=waiting_task_keyboard().as_markup())
+    # подтверждение автору
+    await message.answer("✅ Отправлено цели. Ждём выполнения.")
 
 @router.message(Command(commands=["end_tod","stop_tod"]))
 async def cmd_end(message: Message):
