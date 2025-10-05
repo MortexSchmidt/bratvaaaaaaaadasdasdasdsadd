@@ -134,7 +134,7 @@ def render_lobby_text(lobby:dict):
 def random_truth(): return random.choice(TRUTHS)
 def random_dare(): return random.choice(DARES)
 
-@router.message(Command(commands=["truthordare","tod"]))
+@router.message(Command(commands=["truthordare","tod","truth"]))
 async def cmd_truth_or_dare(message: Message):
     chat_id=message.chat.id; user_id=message.from_user.id
     if message.chat.type not in {"group","supergroup"}: return await message.answer("Эта игра только в группах")
@@ -404,11 +404,9 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
         return await cb.answer("Готово")
     await cb.answer()
 
-@router.message()
+@router.message(lambda m: m.chat.type == 'private' and m.from_user.id in waiting_for_input)
 async def private_task_input(message: Message, bot: Bot):
     # Обрабатываем приватный ввод задания
-    if message.chat.type != 'private':
-        return
     uid = message.from_user.id
     if uid not in waiting_for_input:
         return
