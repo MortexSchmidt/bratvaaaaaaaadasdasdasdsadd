@@ -51,15 +51,25 @@ async def main():
         logging.error(f"Failed to initialize database: {e}")
 
     # регистрация роутеров
+    logging.info("Registering basic router...")
     dp.include_router(basic.router)
+    logging.info("Registering fun router...")
     dp.include_router(fun.router)
+    logging.info("Registering group router...")
     dp.include_router(group_handlers.router)
+    logging.info("Registering mafia router...")
     dp.include_router(mafia.router)
+    logging.info("Registering drochka router...")
     dp.include_router(drochka.router)  # Register drochka router
+    logging.info("Registering rp router...")
     dp.include_router(rp.router)  # Register RP router
+    logging.info("Registering ai router...")
     dp.include_router(ai.router)  # Register AI router
+    logging.info("Registering tictactoe router...")
     dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
+    logging.info("Registering truth_or_dare router...")
     dp.include_router(truth_or_dare.router) # Register Truth or Dare router
+    logging.info("Registering diagnostic router...")
     # Диагностика в конце: fallback теперь не блокирует другие
     dp.include_router(diagnostic.router)
 
