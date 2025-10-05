@@ -303,7 +303,7 @@ async def cmd_drochka(message:Message): await perform_drochka(message)
 @router.message(lambda m: m.text and "дроч" in m.text.lower())
 async def word_droch(message:Message): await perform_drochka(message)
 
-@router.message(Command(commands=["статистика_дрочка","дрочка_статы","drochka_stats"]))
+@router.message(Command(commands=["статистика_дрочка","дрочка_статы","drochka_stats","drochka_stat","drochka_stats" ]))
 async def cmd_drochka_stats(message:Message):
 	uid=str(message.from_user.id); data=load_data();
 	if uid not in data: return await message.answer("Ты еще ни разу не дрочил! Используй /дрочка чтобы начать.")
@@ -313,7 +313,7 @@ async def cmd_drochka_stats(message:Message):
 		lt=parse_saved_ts(ud['last_drochka']);
 		if lt: resp+=f"Последний дрочок: {lt.strftime('%d.%m.%Y %H:%M')} ({TIMEZONE_NAME})"; await message.answer(resp)
 
-@router.message(Command(commands=["дрочик_имя","drochka_name","set_drochka_name","питомец"]))
+@router.message(Command(commands=["дрочик_имя","drochka_name","set_drochka_name","питомец","pet"]))
 async def cmd_set_pet_name(message:Message):
 	parts=message.text.split(maxsplit=1)
 	if len(parts)<2: return await message.answer("Использование: /дрочик_имя <название> (до 30 символов)")
@@ -323,7 +323,7 @@ async def cmd_set_pet_name(message:Message):
 	if uid not in data: data[uid]={'username':username,'last_drochka':None,'total_drochka':0,'current_streak':0,'max_streak':0,'pet_name':None}
 	ud=data[uid]; ud['username']=username; ud['pet_name']=pet_name; persist_user(uid,ud); await message.answer(f"Имя дрочика установлено: {pet_name}")
 
-@router.message(Command(commands=["drochka_top","drochka_leaders","дрочка_топ","лидеры"]))
+@router.message(Command(commands=["drochka_top","drochka_leaders","дрочка_топ","лидеры","leaders"]))
 async def cmd_drochka_top(message:Message):
 	init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); cur.execute('SELECT user_id, username, current_streak, max_streak, total_drochka FROM user_stats ORDER BY current_streak DESC, max_streak DESC, total_drochka DESC LIMIT 10'); rows=cur.fetchall(); conn.close()
 	if not rows: return await message.answer('Пока пусто.')
@@ -331,7 +331,7 @@ async def cmd_drochka_top(message:Message):
 	for i,(uid,username,cur_st,max_st,total) in enumerate(rows,start=1): lines.append(f"{i}. {username or uid} — {cur_st}🔥 (макс {max_st}, всего {total})")
 	await message.answer('\n'.join(lines))
 
-@router.message(Command(commands=["drochka_achievements","дрочка_ачивки","ачивки"]))
+@router.message(Command(commands=["drochka_achievements","дрочка_ачивки","ачивки","achievements"]))
 async def cmd_drochka_achievements(message:Message):
 	uid=str(message.from_user.id); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); cur.execute('SELECT code, earned_at FROM user_achievements WHERE user_id=? ORDER BY earned_at',(uid,)); rows=cur.fetchall(); conn.close()
 	if not rows: return await message.answer('Пока нет достижений. Дрочь каждый день, чтобы открыть! 🔥')
