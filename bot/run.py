@@ -61,6 +61,34 @@ async def main():
         stats = await broadcast(bot, config.admins, parts[1])
         await message.answer(f"Рассылка завершена: {stats}")
 
+    async def apply_commands():
+        # Удаляем (ставим пустой список) и заново задаём чтобы клиенты обновили кэш
+        try:
+            await bot.set_my_commands([], scope=BotCommandScopeDefault())
+            await bot.set_my_commands([], scope=BotCommandScopeAllPrivateChats())
+            await bot.set_my_commands([], scope=BotCommandScopeAllGroupChats())
+        except Exception:
+            pass
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS],
+            scope=BotCommandScopeDefault()
+        )
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS if c != "groupinfo"],
+            scope=BotCommandScopeAllPrivateChats()
+        )
+        await bot.set_my_commands(
+            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS],
+            scope=BotCommandScopeAllGroupChats()
+        )
+
+    @dp.message(Command(commands=["refresh_commands"]))
+    async def cmd_refresh_commands(message: Message):
+        if message.from_user.id not in config.admins:
+            return await message.answer("Недостаточно прав")
+        await apply_commands()
+        await message.answer("Команды обновлены (очищено и перезаписано). Если не видно — закрой и заново открой меню / в Telegram.")
+
     BASE_COMMANDS = [
         ("start", "Начать"),
         ("help", "Справка"),
@@ -96,22 +124,7 @@ async def main():
     ]
 
     async def setup_commands():
-        base_cmds = BASE_COMMANDS
-        # Default scope (рекомендуется, чтобы клиенты подхватили подсказки)
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in base_cmds],
-            scope=BotCommandScopeDefault()
-        )
-        # Private chats (можно без groupinfo, но оставим симметрично)
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in base_cmds if c != "groupinfo"],
-            scope=BotCommandScopeAllPrivateChats()
-        )
-        # Group chats
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in base_cmds],
-            scope=BotCommandScopeAllGroupChats()
-        )
+        await apply_commands()
         # Логируем что реально установлено по default
         try:
             cmds = await bot.get_my_commands(scope=BotCommandScopeDefault())
