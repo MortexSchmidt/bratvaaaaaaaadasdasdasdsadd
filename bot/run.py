@@ -79,8 +79,11 @@ async def main():
             ("kill_mafia", "Убить ночью"),
             ("heal_mafia", "Лечить ночью"),
             ("check_mafia", "Проверить ночью"),
-            ("drochka", "Поработать рукой"),  # Changed to Latin characters
-            ("drochka_stats", "Статистика дрочки"),  # Changed to Latin characters
+            ("drochka", "Поработать рукой"),
+            ("drochka_stats", "Статистика дрочки"),
+            ("drochka_top", "Топ по серии"),
+            ("drochka_achievements", "Дрочка ачивки"),
+            ("drochka_name", "Имя дрочика"),
             ("tictactoe", "Играть в крестики-нолики"),  # Added Tic Tac Toe command
             ("truthordare", "Играть в правду или действие"),  # Added Truth or Dare command
             ("tod", "Играть в правду или действие"),  # Added Truth or Dare command (short version)
@@ -113,6 +116,8 @@ async def main():
 
     print("Запуск бота...")
     await setup_commands()
+    # Запускаем периодический таск проверки перерывов дрочки
+    asyncio.create_task(drочка.check_breaks_and_notify(bot))
     await bot.delete_webhook(drop_pending_updates=True)
     # Используем polling в режиме, подходящем для многопоточной среды
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
