@@ -3,17 +3,10 @@ from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
-from aiogram.utils.web_app import create_web_app_data
 from typing import Dict, List, Optional
 import json
 import random
 import os
-from datetime import datetime
-import hashlib
-import hmac
-# Конфигурация для WebApp
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://your-bot-domain.onrender.com/mini_apps/truth_or_dare/")
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Требуется для генерации WebApp initData
 
 router = Router(name="truth_or_dare")
 
