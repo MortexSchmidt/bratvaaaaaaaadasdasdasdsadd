@@ -40,14 +40,17 @@ TRUTHS, DARES = load_content()
 
 MODE_CLOCKWISE = "clockwise"
 MODE_ANYONE = "anyone"
+RULES_WITH = "with_rules"
+RULES_WITHOUT = "no_rules"
 
 class TruthOrDareGame:
-    def __init__(self, chat_id: int, players: List[int], player_names: Dict[int,str], creator_id: int, mode: str):
+    def __init__(self, chat_id: int, players: List[int], player_names: Dict[int,str], creator_id: int, mode: str, rules_mode: str):
         self.chat_id = chat_id
         self.players = players
         self.player_names = player_names
         self.creator_id = creator_id
         self.mode = mode  # clockwise | anyone
+        self.rules_mode = rules_mode  # with_rules | no_rules
         self.current_index = 0
         self.passes_used = {pid:0 for pid in players}
         self.phase = "waiting_action"  # waiting_action | select_target | task_active
@@ -59,21 +62,26 @@ class TruthOrDareGame:
     def next_player(self):
         self.current_index = (self.current_index + 1) % len(self.players)
         self.phase = "waiting_action"; self.current_task=None; self.current_task_type=None
-    def pass_available(self, pid:int): return self.passes_used.get(pid,0) < 1
+    def pass_available(self, pid:int):
+        if self.rules_mode == RULES_WITH:
+            return self.passes_used.get(pid,0) < 1  # один пас
+        # без правил пасов бесконечно
+        return True
     def use_pass(self, pid:int): self.passes_used[pid]= self.passes_used.get(pid,0)+1
 
 lobbies: Dict[int, dict] = {}
 active_games: Dict[int, TruthOrDareGame] = {}
 
-def lobby_keyboard(is_creator: bool, mode: str):
+def lobby_keyboard(is_creator: bool, mode: str, rules: str):
     kb=InlineKeyboardBuilder(); kb.button(text="Присоединиться", callback_data="tod:lobby:join")
-    # toggle mode button (creator only)
     mode_label = "Режим: По кругу" if mode == MODE_CLOCKWISE else "Режим: Кому угодно"
+    rules_label = "Правила: Вкл" if rules == RULES_WITH else "Правила: Выкл"
     if is_creator:
         kb.button(text=mode_label, callback_data="tod:lobby:mode")
+        kb.button(text=rules_label, callback_data="tod:lobby:rules")
         kb.button(text="Старт", callback_data="tod:lobby:start")
         kb.button(text="Отмена", callback_data="tod:lobby:cancel")
-        kb.adjust(1,2,1)
+        kb.adjust(2,2)
     else:
         kb.adjust(1)
     return kb
@@ -92,7 +100,9 @@ def mention_name(uid:int, name:str): return f"<a href='tg://user?id={uid}'>{name
 def render_lobby_text(lobby:dict):
     lines=["🎉 <b>Лобби 'Правда или Действие'</b>",""]
     mode_txt = "По кругу ⏱" if lobby['mode']==MODE_CLOCKWISE else "Кому угодно 🎯"
+    rules_txt = "С правилами ✅ (1 пас)" if lobby['rules']==RULES_WITH else "Без правил ♾ (пасы беск.)"
     lines.append(f"⚙️ Режим: <b>{mode_txt}</b>")
+    lines.append(f"🧷 Правила: <b>{rules_txt}</b>")
     lines.append("")
     lines.append(f"👥 Игроки ({len(lobby['players'])}):")
     for pid in lobby['players']:
@@ -110,9 +120,9 @@ async def cmd_truth_or_dare(message: Message):
     if chat_id in active_games: return await message.answer("Игра уже идёт")
     if chat_id in lobbies: return await message.answer("Лобби уже создано")
     name= message.from_user.first_name or message.from_user.username or "Игрок"
-    lobby={"creator":user_id,"players":[user_id],"player_names":{user_id:name},"message_id":None, "mode": MODE_CLOCKWISE}
+    lobby={"creator":user_id,"players":[user_id],"player_names":{user_id:name},"message_id":None, "mode": MODE_CLOCKWISE, "rules": RULES_WITH}
     lobbies[chat_id]=lobby
-    msg= await message.answer(render_lobby_text(lobby), parse_mode="HTML", reply_markup=lobby_keyboard(True, lobby['mode']).as_markup())
+    msg= await message.answer(render_lobby_text(lobby), parse_mode="HTML", reply_markup=lobby_keyboard(True, lobby['mode'], lobby['rules']).as_markup())
     lobby["message_id"]=msg.message_id
 
 @router.callback_query()
@@ -128,24 +138,33 @@ async def tod_callbacks(cb: CallbackQuery, bot: Bot):
                 lobby['players'].append(user_id); lobby['player_names'][user_id]= cb.from_user.first_name or cb.from_user.username or "Игрок"; await cb.answer("Готово ✅")
             else: await cb.answer("Вы уже в лобби")
             try:
-                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(lobby['creator']==cb.from_user.id, lobby['mode']).as_markup(), parse_mode="HTML")
+                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(lobby['creator']==cb.from_user.id, lobby['mode'], lobby['rules']).as_markup(), parse_mode="HTML")
             except Exception: pass
         elif sub=="mode":
             if user_id!=lobby['creator']: return await cb.answer("Только создатель")
             lobby['mode'] = MODE_ANYONE if lobby['mode']==MODE_CLOCKWISE else MODE_CLOCKWISE
             try:
-                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(True, lobby['mode']).as_markup(), parse_mode="HTML")
+                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(True, lobby['mode'], lobby['rules']).as_markup(), parse_mode="HTML")
             except Exception: pass
             return await cb.answer("Режим переключен")
+        elif sub=="rules":
+            if user_id!=lobby['creator']: return await cb.answer("Только создатель")
+            lobby['rules'] = RULES_WITHOUT if lobby['rules']==RULES_WITH else RULES_WITH
+            try:
+                await bot.edit_message_text(chat_id=chat_id, message_id=lobby['message_id'], text=render_lobby_text(lobby), reply_markup=lobby_keyboard(True, lobby['mode'], lobby['rules']).as_markup(), parse_mode="HTML")
+            except Exception: pass
+            return await cb.answer("Правила переключены")
         elif sub=="start":
             if user_id!=lobby['creator']: return await cb.answer("Не ты создавал")
             if len(lobby['players'])<2: return await cb.answer("Минимум 2 игрока")
-            game= TruthOrDareGame(chat_id,lobby['players'],lobby['player_names'],lobby['creator'], lobby['mode'])
+            game= TruthOrDareGame(chat_id,lobby['players'],lobby['player_names'],lobby['creator'], lobby['mode'], lobby['rules'])
             active_games[chat_id]=game; del lobbies[chat_id]
             mode_txt = "По кругу ⏱" if game.mode==MODE_CLOCKWISE else "Кому угодно 🎯"
+            rules_txt = "1 пас (осторожно)" if game.rules_mode==RULES_WITH else "Неограниченные пасы"
             await cb.message.edit_text(
                 f"🚀 <b>Игра началась!</b>\n\n" \
                 f"Режим: <b>{mode_txt}</b>\n" \
+                f"Правила: <b>{rules_txt}</b>\n" \
                 f"Ход: {mention_name(game.current_player_id(), game.current_player_name())}\nВыбирай действие.",
                 parse_mode="HTML", reply_markup=action_keyboard(game).as_markup())
             await cb.answer()
@@ -243,4 +262,11 @@ async def cmd_end(message: Message):
 
 @router.message(Command(commands=["tod_help"]))
 async def cmd_tod_help(message: Message):
-    await message.answer("<b>Правда или Действие (ремастер)</b>\n\n/truthordare — создать лобби\n/end_tod — завершить (создатель)\n/tod_help — помощь\n\nХод: выбрать задание — выполнить — Далее.", parse_mode="HTML")
+    await message.answer(
+        "<b>Правда или Действие (ремастер)</b>\n\n"
+        "/truthordare — создать лобби\n"
+        "Переключатели: режим (по кругу / кому угодно), правила (1 пас / бесконечно).\n"
+        "/end_tod — завершить (создатель)\n"
+        "/tod_help — помощь\n\n"
+        "Ход: выбрать задание — (выбрать цель если нужно) — выполнить — Далее.",
+        parse_mode="HTML")
