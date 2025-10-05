@@ -1,9 +1,92 @@
-# Root ignore
-.venv/
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Logs
 *.log
-.env
-# OS
+logs/
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local config
+config_local.py
+local_settings.py
+
+# Database
+*.db
+*.db-journal
+
+# Process identifier
+*.pid
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+.cache
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Coverage and profiling
+.coverage*
+coverage.xml
+*.cover
+
+# Compiled static assets
+*.css.map
+*.js.map
+
+# Mini-App temporary files
+bot/app/mini_apps/truth_or_dare/static/*.tmp
+bot/app/mini_apps/truth_or_dare/static/generate_icons.py
+
+# Session files
+*.session
+sessions/
+
+# Additional files specific to this project
+bot/app/mini_apps/truth_or_dare/static/icon-*.png

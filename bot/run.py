@@ -69,18 +69,9 @@ async def main():
             await bot.set_my_commands([], scope=BotCommandScopeAllGroupChats())
         except Exception:
             pass
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS],
-            scope=BotCommandScopeDefault()
-        )
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS if c != "groupinfo"],
-            scope=BotCommandScopeAllPrivateChats()
-        )
-        await bot.set_my_commands(
-            [BotCommand(command=c, description=d) for c, d in BASE_COMMANDS],
-            scope=BotCommandScopeAllGroupChats()
-        )
+            await bot.set_my_commands(BASE_COMMANDS, scope=BotCommandScopeDefault())
+            await bot.set_my_commands([cmd for cmd in BASE_COMMANDS], scope=BotCommandScopeAllPrivateChats())
+            await bot.set_my_commands(BASE_COMMANDS, scope=BotCommandScopeAllGroupChats())
 
     @dp.message(Command(commands=["refresh_commands"]))
     async def cmd_refresh_commands(message: Message):
@@ -90,37 +81,16 @@ async def main():
         await message.answer("Команды обновлены (очищено и перезаписано). Если не видно — закрой и заново открой меню / в Telegram.")
 
     BASE_COMMANDS = [
-        ("start", "Начать"),
-        ("help", "Справка"),
-        ("ping", "Проверка"),
-        ("echo", "Эхо текст"),
-        ("fun", "Случайная фаза"),
-        ("groupinfo", "Инфо о группе"),
-        ("whoami", "Ваш ID"),
-        ("id", "То же что /whoami"),
-        # Mafia
-        ("mafia", "Инфо о мафии"),
-        ("mafia_start", "Начать мафию"),
-        ("join_mafia", "Присоединиться"),
-        ("start_game_mafia", "Старт игры мафия"),
-        ("vote", "Голосовать @user"),
-        ("kill_mafia", "Убить ночью"),
-        ("heal_mafia", "Лечить ночью"),
-        ("check_mafia", "Проверить ночью"),
-        # Drochka
-        ("drochka", "Дрочка сегодня"),
-        ("drochka_stats", "Стата дрочки"),
-        ("drochka_top", "Топ серия"),
-        ("drochka_achievements", "Ачивки дрочки"),
-        ("drochka_name", "Имя дрочика"),
-        # Games
-        ("tictactoe", "Крестики-нолики"),
-        # Truth or Dare
-        ("truthordare", "Правда или Действие"),
-        ("tod", "П/Д (коротко)"),
-        ("tod_help", "Помощь П/Д"),
-        ("end_tod", "Стоп П/Д"),
-        ("stop_tod", "Стоп П/Д"),
+           BotCommand(command="start", description="Запуск бота"),
+           BotCommand(command="дрочка", description="Совершить действие (раз в день)"),
+           BotCommand(command="питомец", description="Задать имя питомцу"),
+           BotCommand(command="лидеры", description="Топ по дрочке"),
+           BotCommand(command="ачивки", description="Мои ачивки"),
+           BotCommand(command="profile", description="Профиль"),
+           BotCommand(command="set_status", description="Установить статус профиля"),
+           BotCommand(command="truth", description="Правда или действие"),
+           BotCommand(command="tod", description="Правда или действие (альт)"),
+           BotCommand(command="refresh_commands", description="Обновить меню команд"),
     ]
 
     async def setup_commands():

@@ -63,7 +63,15 @@ def init_db():
             current_streak INTEGER DEFAULT 0,
             max_streak INTEGER DEFAULT 0,
             pet_name TEXT,
-            break_notified INTEGER DEFAULT 0
+            break_notified INTEGER DEFAULT 0,
+            xp INTEGER DEFAULT 0,
+            coins INTEGER DEFAULT 0,
+            elo_ttt INTEGER DEFAULT 1000,
+            ttt_wins INTEGER DEFAULT 0,
+            ttt_losses INTEGER DEFAULT 0,
+            daily_streak INTEGER DEFAULT 0,
+            last_daily TEXT,
+            profile_status TEXT
         )
     ''')
     # Миграция: если старый столбец pet_name отсутствует — добавить
@@ -73,6 +81,20 @@ def init_db():
         cursor.execute("ALTER TABLE user_stats ADD COLUMN pet_name TEXT")
     if 'break_notified' not in cols:
         cursor.execute("ALTER TABLE user_stats ADD COLUMN break_notified INTEGER DEFAULT 0")
+    # New profile-related columns
+    add_cols = {
+        'xp': "ALTER TABLE user_stats ADD COLUMN xp INTEGER DEFAULT 0",
+        'coins': "ALTER TABLE user_stats ADD COLUMN coins INTEGER DEFAULT 0",
+        'elo_ttt': "ALTER TABLE user_stats ADD COLUMN elo_ttt INTEGER DEFAULT 1000",
+        'ttt_wins': "ALTER TABLE user_stats ADD COLUMN ttt_wins INTEGER DEFAULT 0",
+        'ttt_losses': "ALTER TABLE user_stats ADD COLUMN ttt_losses INTEGER DEFAULT 0",
+        'daily_streak': "ALTER TABLE user_stats ADD COLUMN daily_streak INTEGER DEFAULT 0",
+        'last_daily': "ALTER TABLE user_stats ADD COLUMN last_daily TEXT",
+        'profile_status': "ALTER TABLE user_stats ADD COLUMN profile_status TEXT"
+    }
+    for col, stmt in add_cols.items():
+        if col not in cols:
+            cursor.execute(stmt)
     # Таблица достижений
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_achievements (
@@ -90,13 +112,14 @@ def load_data() -> Dict:
     init_db()  # Ensure DB is initialized
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, username, last_drочка, total_drочка, current_streak, max_streak, COALESCE(pet_name, ""), break_notified FROM user_stats')
+    cursor.execute('SELECT user_id, username, last_drочка, total_drочка, current_streak, max_streak, COALESCE(pet_name, ""), break_notified, xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status FROM user_stats')
     rows = cursor.fetchall()
     conn.close()
     
     data = {}
     for row in rows:
-        user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified = row
+        (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
+         xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status) = row
         data[user_id] = {
             "username": username,
             "last_drочка": last_drочка,
@@ -104,22 +127,85 @@ def load_data() -> Dict:
             "current_streak": current_streak,
             "max_streak": max_streak,
             "pet_name": pet_name or None,
-            "break_notified": break_notified or 0
+            "break_notified": break_notified or 0,
+            "xp": xp or 0,
+            "coins": coins or 0,
+            "elo_ttt": elo_ttt or 1000,
+            "ttt_wins": ttt_wins or 0,
+            "ttt_losses": ttt_losses or 0,
+            "daily_streak": daily_streak or 0,
+            "last_daily": last_daily,
+            "profile_status": profile_status or ''
         }
     return data
 
-def save_user_data(user_id: str, username: str, last_drочка: str, total_drочка: int, current_streak: int, max_streak: int, pet_name: str | None, break_notified: int = 0):
+def save_user_data(user_id: str, username: str, last_drочка: str, total_drочка: int, current_streak: int, max_streak: int, pet_name: str | None, break_notified: int = 0,
+                   xp: int = 0, coins: int = 0, elo_ttt: int = 1000, ttt_wins: int = 0, ttt_losses: int = 0, daily_streak: int = 0,
+                   last_daily: str | None = None, profile_status: str | None = None):
     """Save user data to database"""
     init_db()  # Ensure DB is initialized
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT OR REPLACE INTO user_stats 
-        (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified))
+        (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
+         xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, username, last_drочка, total_drочка, current_streak, max_streak, pet_name, break_notified,
+          xp, coins, elo_ttt, ttt_wins, ttt_losses, daily_streak, last_daily, profile_status))
     conn.commit()
     conn.close()
+
+def get_or_init_user(user_id: str, username: str) -> dict:
+    data = load_data()
+    if user_id not in data:
+        data[user_id] = {
+            "username": username,
+            "last_drочка": None,
+            "total_drочка": 0,
+            "current_streak": 0,
+            "max_streak": 0,
+            "pet_name": None,
+            "break_notified": 0,
+            "xp": 0,
+            "coins": 0,
+            "elo_ttt": 1000,
+            "ttt_wins": 0,
+            "ttt_losses": 0,
+            "daily_streak": 0,
+            "last_daily": None,
+            "profile_status": ''
+        }
+    return data[user_id]
+
+def persist_user(user_id: str, ud: dict):
+    save_user_data(
+        user_id,
+        ud.get('username',''),
+        ud.get('last_drочка'),
+        ud.get('total_drочка',0),
+        ud.get('current_streak',0),
+        ud.get('max_streak',0),
+        ud.get('pet_name'),
+        ud.get('break_notified',0),
+        ud.get('xp',0),
+        ud.get('coins',0),
+        ud.get('elo_ttt',1000),
+        ud.get('ttt_wins',0),
+        ud.get('ttt_losses',0),
+        ud.get('daily_streak',0),
+        ud.get('last_daily'),
+        ud.get('profile_status')
+    )
+
+def add_xp(ud: dict, amount: int):
+    ud['xp'] = ud.get('xp',0) + amount
+    # simple level calc (optional)
+    return ud['xp']
+
+def add_coins(ud: dict, amount: int):
+    ud['coins'] = ud.get('coins',0) + amount
+    return ud['coins']
 
 def has_achievement(user_id: str, code: str) -> bool:
     init_db()
@@ -152,21 +238,8 @@ async def perform_drочка(message: Message):
     user_id = str(message.from_user.id)
     username = message.from_user.username or message.from_user.full_name or "Аноним"
     
-    data = load_data()
-    
-    # Initialize user data if not exists
-    if user_id not in data:
-        data[user_id] = {
-            "username": username,
-            "last_drочка": None,
-            "total_drочка": 0,
-            "current_streak": 0,
-            "max_streak": 0,
-            "pet_name": None,
-            "break_notified": 0
-        }
-    
-    user_data = data[user_id]
+    user_data = get_or_init_user(user_id, username)
+    user_data['username'] = username
     
     # Timezone aware values
     now = now_tz()
@@ -188,16 +261,11 @@ async def perform_drочка(message: Message):
         user_data['break_notified'] = 0
         if user_data["current_streak"] > user_data["max_streak"]:
             user_data["max_streak"] = user_data["current_streak"]
-        save_user_data(
-            user_id,
-            username,
-            user_data["last_drочка"],
-            user_data["total_drочка"],
-            user_data["current_streak"],
-            user_data["max_streak"],
-            user_data.get("pet_name"),
-            user_data.get('break_notified',0)
-        )
+        # Reward xp/coins basic logic
+        add_xp(user_data, 3 if user_data['current_streak'] % 10 == 0 else 1)
+        if user_data['current_streak'] % 7 == 0:
+            add_coins(user_data, 1)  # combo coin каждые 7 подряд
+        persist_user(user_id, user_data)
         user_mention = format_user_mention(message.from_user)
         flame = "🔥" * min(user_data['current_streak'], 5)
         pet_part = f" на своего '{user_data['pet_name']}'" if user_data.get('pet_name') else ""
@@ -228,6 +296,48 @@ async def perform_drочка(message: Message):
         )
     
     await message.answer(response)
+
+@router.message(Command(commands=["profile","профиль"]))
+async def cmd_profile(message: Message):
+    uid = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.full_name or "Аноним"
+    ud = get_or_init_user(uid, username)
+    # Level formula: lvl = floor(sqrt(xp/10))* (simple)
+    xp = ud.get('xp',0)
+    import math
+    level = int(math.sqrt(xp/10)) if xp>0 else 0
+    elo = ud.get('elo_ttt',1000)
+    streak = ud.get('current_streak',0)
+    max_streak = ud.get('max_streak',0)
+    coins = ud.get('coins',0)
+    pet = ud.get('pet_name') or '—'
+    status = ud.get('profile_status') or '—'
+    ttt_w = ud.get('ttt_wins',0)
+    ttt_l = ud.get('ttt_losses',0)
+    response = (
+        f"👤 Профиль: {username}\n"
+        f"LVL: {level} | XP: {xp}\n"
+        f"Монеты: {coins}\n"
+        f"Streak: {streak} (max {max_streak})\n"
+        f"Дрочков всего: {ud.get('total_drочка',0)}\n"
+        f"Pet: {pet}\n"
+        f"TicTacToe: {ttt_w}W/{ttt_l}L | ELO {elo}\n"
+        f"Статус: {status}"
+    )
+    await message.answer(response)
+
+@router.message(Command(commands=["set_status","статус"]))
+async def cmd_set_status(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        return await message.answer("Использование: /set_status <текст>")
+    uid = str(message.from_user.id)
+    username = message.from_user.username or message.from_user.full_name or "Аноним"
+    ud = get_or_init_user(uid, username)
+    txt = parts[1][:60]
+    ud['profile_status'] = txt
+    persist_user(uid, ud)
+    await message.answer("Статус обновлён.")
 
 @router.message(Command(commands=["дрочка", "дрочить", "drochka"]))
 async def cmd_drочка(message: Message):
