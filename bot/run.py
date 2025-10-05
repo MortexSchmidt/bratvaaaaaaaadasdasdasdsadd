@@ -82,6 +82,7 @@ async def main():
 
     BASE_COMMANDS = [
            BotCommand(command="start", description="Запуск бота"),
+        BotCommand(command="help", description="Справка с разделами"),
            BotCommand(command="дрочка", description="Совершить действие (раз в день)"),
            BotCommand(command="питомец", description="Задать имя питомцу"),
            BotCommand(command="лидеры", description="Топ по дрочке"),
