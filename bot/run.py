@@ -13,6 +13,7 @@ from app.handlers import rp  # Added RP handler
 from app.handlers import ai  # Added AI handler
 from app.handlers import tictactoe  # Added Tic Tac Toe handler
 from app.handlers import truth_or_dare  # Added Truth or Dare handler
+from app.handlers import diagnostic  # Diagnostic tools
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -40,6 +41,7 @@ async def main():
         logging.error(f"Failed to initialize database: {e}")
 
     # регистрация роутеров
+    dp.include_router(diagnostic.router)  # сначала диагностика (/ _diag)
     dp.include_router(basic.router)
     dp.include_router(fun.router)
     dp.include_router(group_handlers.router)
