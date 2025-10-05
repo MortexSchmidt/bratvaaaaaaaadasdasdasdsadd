@@ -17,6 +17,8 @@ from app.handlers import diagnostic  # Diagnostic tools
 from app.utils.broadcast import broadcast
 from aiogram.filters import Command
 from aiogram.types import Message
+from aiogram import BaseMiddleware
+from typing import Callable, Awaitable, Any, Dict
 
 
 async def main():
@@ -24,6 +26,14 @@ async def main():
     # В aiogram 3.3.0 ещё нет DefaultBotProperties, передаём parse_mode напрямую
     bot = Bot(token=config.bot_token, parse_mode=ParseMode.HTML)
     dp = Dispatcher()
+
+    class LogUpdateMiddleware(BaseMiddleware):
+        async def __call__(self, handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]], event: Message, data: Dict[str, Any]):
+            logging.getLogger("updates").info("Incoming message: chat=%s user=%s text=%r", getattr(event.chat,'id',None), getattr(event.from_user,'id',None), getattr(event,'text',None))
+            return await handler(event, data)
+
+    # Подключаем middleware на уровень сообщений
+    dp.message.middleware(LogUpdateMiddleware())
 
     # базовое логирование
     import logging, sys
@@ -41,7 +51,6 @@ async def main():
         logging.error(f"Failed to initialize database: {e}")
 
     # регистрация роутеров
-    dp.include_router(diagnostic.router)  # сначала диагностика (/ _diag)
     dp.include_router(basic.router)
     dp.include_router(fun.router)
     dp.include_router(group_handlers.router)
@@ -51,6 +60,8 @@ async def main():
     dp.include_router(ai.router)  # Register AI router
     dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
     dp.include_router(truth_or_dare.router) # Register Truth or Dare router
+    # Диагностика в конце: fallback теперь не блокирует другие
+    dp.include_router(diagnostic.router)
 
     # простая админ-команда /broadcast
     @dp.message(Command(commands=["broadcast"]))
