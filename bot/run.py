@@ -46,7 +46,7 @@ async def main():
     # Initialize the database for drochka system
     try:
         drochka.init_db()
-        logging.info("Database initialized successfully")
+        logging.info("Database initialized successfully (file: %s)", getattr(drochka,'DB_FILE','?'))
     except Exception as e:
         logging.error(f"Failed to initialize database: {e}")
 

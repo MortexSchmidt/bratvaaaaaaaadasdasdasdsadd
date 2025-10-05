@@ -33,11 +33,47 @@ def parse_saved_ts(ts: str | None) -> datetime | None:
 		return dt
 	except Exception: return None
 
-DB_FILE = os.path.join(os.getenv("DB_DIR", "."), "drochka_data.db")
+def _select_db_dir():
+	# 1) Пользователь мог задать DB_DIR явно
+	env_dir = os.getenv("DB_DIR")
+	candidates = []
+	if env_dir:
+		candidates.append(env_dir)
+	# 2) Текущая папка (может быть read-only на Heroku / Render)
+	candidates.append('.')
+	# 3) tmp (обычно writable даже на read-only slug)
+	candidates.append('/tmp/bratva_data')
+	for c in candidates:
+		try:
+			os.makedirs(c, exist_ok=True)
+			test_path = os.path.join(c, '__wtest__')
+			with open(test_path, 'w', encoding='utf-8') as f:
+				f.write('ok')
+			os.remove(test_path)
+			return c
+		except Exception:
+			continue
+	# финальный fallback
+	return '/tmp'
+
+DB_BASE_DIR = _select_db_dir()
+DB_FILE = os.path.join(DB_BASE_DIR, "drochka_data.db")
 
 def init_db():
 	os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
+	# Попытка исправить read-only файл если он случайно с такими правами
+	try:
+		if os.path.exists(DB_FILE) and not os.access(DB_FILE, os.W_OK):
+			# попробуем chmod если возможно
+			try: os.chmod(DB_FILE, 0o664)
+			except Exception: pass
+	except Exception:
+		pass
 	conn = sqlite3.connect(DB_FILE); cur = conn.cursor()
+	try:
+		cur.execute('PRAGMA journal_mode=WAL')
+	except Exception:
+		pass
 	cur.execute('''CREATE TABLE IF NOT EXISTS user_stats (
 		user_id TEXT PRIMARY KEY,
 		username TEXT,
@@ -168,8 +204,18 @@ def current_week_key()->str: iso=now_tz().isocalendar(); return f"{iso.year}-W{i
 def update_weekly_progress(user_id:str): init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); wk=current_week_key(); cur.execute('INSERT OR IGNORE INTO weekly_progress(week_key,total_actions) VALUES (?,0)',(wk,)); cur.execute('UPDATE weekly_progress SET total_actions=total_actions+1 WHERE week_key=?',(wk,)); cur.execute('INSERT OR IGNORE INTO weekly_participants(week_key,user_id) VALUES (?,?)',(wk,user_id)); conn.commit(); conn.close()
 
 def ensure_daily_quest(user_id:str):
-	today=today_key(); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?',(user_id,today,'daily_drochka')); row=cur.fetchone();
-	if row is None: cur.execute('INSERT INTO daily_quests(user_id,date,code,progress,target,done) VALUES (?,?,?,?,?,?)',(user_id,today,'daily_drochka',0,1,0)); conn.commit(); conn.close()
+	today=today_key(); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); inserted=False
+	try:
+		cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?',(user_id,today,'daily_drochka'))
+		row=cur.fetchone()
+		if row is None:
+			cur.execute('INSERT INTO daily_quests(user_id,date,code,progress,target,done) VALUES (?,?,?,?,?,?)',(user_id,today,'daily_drochka',0,1,0))
+			inserted=True
+			conn.commit()
+	finally:
+		try: conn.close()
+		except Exception: pass
+	return inserted
 def complete_daily_quest_if_applicable(user_id:str, ud:dict):
 	today=today_key(); init_db(); conn=sqlite3.connect(DB_FILE); cur=conn.cursor(); cur.execute('SELECT done FROM daily_quests WHERE user_id=? AND date=? AND code=?',(user_id,today,'daily_drochka')); row=cur.fetchone();
 	if row and row[0]==0:
@@ -278,7 +324,7 @@ async def cmd_titles(message:Message):
 @router.message(Command(commands=["equip"]))
 async def cmd_equip(message:Message):
 	parts=message.text.split(maxsplit=1)
-	if len(parts)<2: return await message.answer('Использование: /equip <точноеНазваниеТитула>')
+	if len(parts)<2: return await message.answer('Использование: /equip &lt;точноеНазваниеТитула&gt;')
 	title=parts[1].strip(); uid=str(message.from_user.id)
 	if equip_title(uid,title): return await message.answer(f"Активирован титул: {title}")
 	await message.answer('Нет такого титула или не получен.')
