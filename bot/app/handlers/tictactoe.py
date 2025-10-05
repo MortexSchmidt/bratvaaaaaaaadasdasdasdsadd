@@ -3,7 +3,7 @@ from aiogram import Router, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
-from .drочка import update_elo
+from .drochka import update_elo
 
 router = Router(name="tictactoe")
 

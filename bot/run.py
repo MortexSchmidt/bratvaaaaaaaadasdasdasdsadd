@@ -8,7 +8,7 @@ from app import load_config
 from app.handlers import basic, fun
 from app.handlers import group as group_handlers
 from app.handlers import mafia
-from app.handlers import drочка  # Added drочка handler
+from app.handlers import drochka  # Renamed from drочка
 from app.handlers import rp  # Added RP handler
 from app.handlers import ai  # Added AI handler
 from app.handlers import tictactoe  # Added Tic Tac Toe handler
@@ -34,7 +34,7 @@ async def main():
 
     # Initialize the database for drochka system
     try:
-        drочка.init_db()
+        drochka.init_db()
         logging.info("Database initialized successfully")
     except Exception as e:
         logging.error(f"Failed to initialize database: {e}")
@@ -44,7 +44,7 @@ async def main():
     dp.include_router(fun.router)
     dp.include_router(group_handlers.router)
     dp.include_router(mafia.router)
-    dp.include_router(drочка.router)  # Register drочка router
+    dp.include_router(drochka.router)  # Register drochka router
     dp.include_router(rp.router)  # Register RP router
     dp.include_router(ai.router)  # Register AI router
     dp.include_router(tictactoe.router)  # Register Tic Tac Toe router
@@ -125,7 +125,7 @@ async def main():
     print("Запуск бота...")
     await setup_commands()
     # Запускаем периодический таск проверки перерывов дрочки
-    asyncio.create_task(drочка.check_breaks_and_notify(bot))
+    asyncio.create_task(drochka.check_breaks_and_notify(bot))
     await bot.delete_webhook(drop_pending_updates=True)
     # Используем polling в режиме, подходящем для многопоточной среды
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
