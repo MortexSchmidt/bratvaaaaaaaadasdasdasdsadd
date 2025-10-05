@@ -234,8 +234,15 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
         user = callback.from_user
         logging.getLogger(__name__).info("User %s (%s) clicked start_miniapp", user.id, user.username)
 
-        # Используем настроенный URL (можно подписать, если нужно)
-        mini_app_url = WEB_APP_URL.rstrip('/') + '/'
+        # Если доступен BOT_TOKEN, пробуем сгенерировать подписанный URL (fallback к базовому)
+        try:
+            if BOT_TOKEN:
+                mini_app_url = generate_mini_app_url(user)
+            else:
+                mini_app_url = WEB_APP_URL.rstrip('/') + '/'
+        except Exception as e:
+            logging.getLogger(__name__).warning("Failed to generate signed mini-app URL: %s", e)
+            mini_app_url = WEB_APP_URL.rstrip('/') + '/'
 
         # Клавиатура с корректным WebAppInfo (aiogram ожидает объект, а не dict)
         builder = InlineKeyboardBuilder()
