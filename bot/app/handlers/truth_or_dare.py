@@ -195,13 +195,15 @@ async def start_truth_or_dare(message: Message):
         "player_usernames": {starter_id: starter_username}
     }
     
-    # Send message asking for game mode selection
+    # Send message asking for game mode selection with clearer instructions
     await message.answer(
         "🎉 <b>Добро пожаловать в 'Правда или Действие 2.0'!</b> 🎉\n\n"
-        "🌟 <b>Новые возможности:</b>\n"
-        "• 🎲 Случайные задания с разными уровнями сложности\n"
-        "• 📱 Современные вопросы и действия\n"
-        "• 👥 Отображение реальных имен игроков\n\n"
+        "🌟 <b>Как играть:</b>\n"
+        "1. Создайте лобби и пригласите друзей\n"
+        "2. Выберите режим игры и правила\n"
+        "3. Начните игру когда все соберутся\n"
+        "4. По очереди задавайте 'Правду' или 'Действие' другим игрокам\n"
+        "5. Выполняйте задания и веселитесь!\n\n"
         "🎯 <b>Выберите режим игры:</b>",
         reply_markup=create_game_modes_keyboard()
     )
@@ -274,7 +276,13 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
 
             lobby_text += "\n🎮 <b>Нажмите 'Присоединиться' чтобы присоединиться!</b>"
 
-            # Send lobby message and store message_id
+            # Send lobby message and store message_id with clearer instructions
+            lobby_text += "\n\n<b>📖 Как играть:</b>\n"
+            lobby_text += "1. Другие игроки нажимают кнопку <b>'Присоединиться'</b>\n"
+            lobby_text += "2. Создатель лобби нажимает <b>'Начать игру'</b> когда все соберутся\n"
+            lobby_text += "3. Игра начинается, первый игрок делает свой ход\n\n"
+            lobby_text += "<i>🎮 Удачи в игре!</i>"
+            
             lobby_message = await callback.message.edit_text(
                 lobby_text,
                 reply_markup=create_lobby_keyboard(is_creator=True),
@@ -496,6 +504,11 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                 lobby_text += f"• {name}\n"
 
             lobby_text += "\n🎮 <b>Нажмите 'Присоединиться' чтобы присоединиться!</b>"
+            lobby_text += "\n\n<b>📖 Как играть:</b>\n"
+            lobby_text += "1. Другие игроки нажимают кнопку <b>'Присоединиться'</b>\n"
+            lobby_text += "2. Создатель лобби нажимает <b>'Начать игру'</b> когда все соберутся\n"
+            lobby_text += "3. Игра начинается, первый игрок делает свой ход\n\n"
+            lobby_text += "<i>🎮 Удачи в игре!</i>"
 
             # Check if joining player is the creator - show start button accordingly
             is_creator = joining_player_id == lobby["creator"]
@@ -528,16 +541,56 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     except Exception:
                         pass  # User might have blocked the bot
 
+            # Update lobby message for the joining player separately to show correct buttons and instructions
+            joining_player_text = (
+                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {rules_description}\n\n"
+                f"👥 <b>Игроки ({len(players)}):</b>\n"
+            )
+
+            for pid in players:
+                name = get_player_display_name(pid, player_names, player_usernames)
+                joining_player_text += f"• {name}\n"
+
+            joining_player_text += "\n🎮 <b>Ожидайте, пока создатель начнет игру!</b>"
+            joining_player_text += "\n\n<b>📖 Как играть:</b>\n"
+            joining_player_text += "1. Создатель лобби нажмет <b>'Начать игру'</b> когда все соберутся\n"
+            joining_player_text += "2. Игра начнется, первый игрок сделает свой ход\n"
+            joining_player_text += "3. По очереди задавайте 'Правду' или 'Действие' другим игрокам\n"
+            joining_player_text += "4. Выполняйте задания и веселитесь!\n\n"
+            joining_player_text += "<i>🎮 Удачи в игре!</i>"
+
             # Update lobby message for the joining player separately to show correct buttons
             try:
                 await callback.message.edit_text(
-                    lobby_text,
+                    joining_player_text,
                     reply_markup=create_lobby_keyboard(joining_player_id == lobby["creator"]),
                     parse_mode='HTML',
                     disable_web_page_preview=True
                 )
             except Exception:
                 pass  # Message might be too old to edit
+
+            # Update main lobby message to ensure creator sees the start button and instructions
+            creator_text = (
+                f"🎉 <b>Лобби 'Правда или Действие 2.0'</b> 🎉\n\n"
+                f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
+                f"📜 <b>Правила:</b> {rules_description}\n\n"
+                f"👥 <b>Игроки ({len(players)}):</b>\n"
+            )
+
+            for pid in players:
+                name = get_player_display_name(pid, player_names, player_usernames)
+                creator_text += f"• {name}\n"
+
+            creator_text += "\n🎮 <b>Нажмите 'Начать игру' когда все соберутся!</b>"
+            creator_text += "\n\n<b>📖 Как играть:</b>\n"
+            creator_text += "1. Нажмите <b>'Начать игру'</b> когда все игроки присоединятся\n"
+            creator_text += "2. Игра начнется, первый игрок сделает свой ход\n"
+            creator_text += "3. По очереди задавайте 'Правду' или 'Действие' другим игрокам\n"
+            creator_text += "4. Выполняйте задания и веселитесь!\n\n"
+            creator_text += "<i>🎮 Удачи в игре!</i>"
 
             # Update main lobby message to ensure creator sees the start button
             lobby_msg_id = lobbies[chat_id]["message_id"]
@@ -546,8 +599,8 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     await bot.edit_message_text(
                         chat_id=chat_id,
                         message_id=lobby_msg_id,
-                        text=lobby_text,
-                        reply_markup=create_lobby_keyboard(lobby["creator"] == lobby["creator"]),  # Creator always sees start button
+                        text=creator_text,
+                        reply_markup=create_lobby_keyboard(True),  # Creator always sees start button
                         parse_mode='HTML',
                         disable_web_page_preview=True
                     )
@@ -580,7 +633,7 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
             # Remove lobby
             del lobbies[chat_id]
 
-            # Notify about game start
+            # Notify about game start with clear instructions
             rules_description = ""
             if game.rules_mode == MODE_WITH_RULES:
                 rules_description = (
@@ -595,12 +648,20 @@ async def handle_truth_or_dare_callback(callback: CallbackQuery, bot: Bot):
                     "• Пас можно использовать неограниченное количество раз\n\n"
                 )
 
+            current_player_name = get_player_display_name(game.get_current_player(), game.player_names, game.player_usernames)
             await callback.message.edit_text(
                 f"🚀 <b>Игра 'Правда или Действие 2.0' началась!</b> 🚀\n\n"
                 f"🎯 <b>Режим:</b> {'По часовой стрелке ⏰' if game.mode == MODE_CLOCKWISE else 'Кому угодно 🎲'}\n"
                 f"📜 <b>Правила:</b> {'С правилами ✅' if game.rules_mode == MODE_WITH_RULES else 'Без правил ❌'}\n"
                 f"{rules_description}\n"
-                f"👤 <b>Ход игрока:</b> {get_player_display_name(game.get_current_player(), game.player_names, game.player_usernames)}\n\n"
+                f"👤 <b>Ход игрока:</b> {current_player_name}\n\n"
+                f"<b>📖 Как играть:</b>\n"
+                f"1. {current_player_name} выбирает <b>Правду</b>, <b>Действие</b> или <b>Случайное</b> задание\n"
+                f"2. Если выбрано <b>Правду</b> или <b>Действие</b>, нужно придумать задание для следующего игрока\n"
+                f"3. Если выбрано <b>Случайное</b>, бот сам выбирает задание\n"
+                f"4. Задание отправляется в личные сообщения боту\n"
+                f"5. Бот доставляет задание следующему игроку\n"
+                f"6. После выполнения задания, ход переходит дальше\n\n"
                 f"🎮 <i>Игра началась! Удачи всем участникам!</i>",
                 parse_mode='HTML'
             )
