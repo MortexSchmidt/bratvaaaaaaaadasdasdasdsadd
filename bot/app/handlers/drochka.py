@@ -237,30 +237,35 @@ async def perform_drochka(message:Message):
 		add_xp(ud, 3 if ud['current_streak']%10==0 else 1)
 		if ud['current_streak']%7==0: mult=max(1, ud['current_streak']//7); add_coins(ud, mult)
 		update_weekly_progress(user_id); persist_user(user_id, ud)
+		# Перезагружаем данные пользователя после обновления
+		ud=get_or_init_user(user_id, username)
 		mention=format_user_mention(message.from_user); flame="🔥"*min(ud['current_streak'],5); pet_part=f" на своего '{ud['pet_name']}'" if ud.get('pet_name') else ''
 		resp=(f"🔥 {mention} подрочил{pet_part}! {flame}\n\n📊 Статистика:\nВсего дрочков: {ud['total_drochka']}\nТекущая серия: {ud['current_streak']} (макс: {ud['max_streak']})")
 		if quest_done: resp+="\n🎯 Daily квест выполнен (+2 XP, +1 монета)"
 		streak=ud['current_streak']
 		for th in (5,10,30,50,100,365):
 			if streak==th:
-				code=f"streak_{th}"; 
+				code=f"streak_{th}";
 				if award_achievement(user_id, code):
 					try: await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
 					except Exception: pass
-					t=ACHIEVEMENT_TITLES.get(code); 
+					t=ACHIEVEMENT_TITLES.get(code);
 					if t: grant_title(user_id,t)
 		for tot in (1000,5000):
 			if ud['total_drochka']==tot:
-				code=f"total_{tot}"; 
+				code=f"total_{tot}";
 				if award_achievement(user_id, code):
 					try: await message.bot.send_message(message.from_user.id, f"🏅 Достижение: {ACHIEVEMENTS[code]}")
 					except Exception: pass
-					t=ACHIEVEMENT_TITLES.get(code); 
+					t=ACHIEVEMENT_TITLES.get(code);
 					if t: grant_title(user_id,t)
+		await message.answer(resp)
 	else:
+		# Перезагружаем данные пользователя перед выводом сообщения, чтобы убедиться, что отображаются актуальные данные
+		ud=get_or_init_user(user_id, username)
 		delta=next_midnight_delta(); hours,remainder=divmod(int(delta.total_seconds()),3600); minutes,_=divmod(remainder,60); mention=format_user_mention(message.from_user); pet_part=f" своего '{ud['pet_name']}'" if ud.get('pet_name') else ''
 		resp=(f"⏳ {mention}, ты уже дрочил{pet_part} сегодня!\nСледующая возможность в 00:00 (таймзона {TIMEZONE_NAME}) через ~ {hours} ч {minutes} мин")
-	await message.answer(resp)
+		await message.answer(resp)
 
 @router.message(Command(commands=["profile","профиль"]))
 async def cmd_profile(message:Message):
